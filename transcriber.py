@@ -33,9 +33,11 @@ def format_timestamp(seconds):
 
 format_srt_time = format_timestamp
 
-def transcribe_audio_file(audio_path, language="ja"):
-    """Transcribes an entire audio file or segment and returns structured segments."""
+def transcribe_audio_file(audio_path, language="ja", progress_callback=None):
+    """Transcribes an entire audio file or segment and returns structured segments with realtime progress updates."""
+    import time
     model = get_whisper_model()
+    start_time = time.time()
     segments_result, info = model.transcribe(
         audio_path,
         language=language,
@@ -43,6 +45,8 @@ def transcribe_audio_file(audio_path, language="ja"):
         vad_parameters=dict(min_silence_duration_ms=500),
         beam_size=5
     )
+
+    total_duration = getattr(info, 'duration', 0) or 1.0
 
     items = []
     full_text_list = []
@@ -56,10 +60,28 @@ def transcribe_audio_file(audio_path, language="ja"):
             })
             full_text_list.append(text)
 
+        if progress_callback and total_duration > 0:
+            cur_end = min(total_duration, s.end)
+            ratio = cur_end / total_duration
+            pct = int(min(99, max(1, ratio * 100)))
+            elapsed = time.time() - start_time
+            if ratio > 0.03 and elapsed > 0.5:
+                est_total = elapsed / ratio
+                eta_sec = max(1, int(est_total - elapsed))
+                eta_str = f"{eta_sec // 60}分{eta_sec % 60}秒" if eta_sec >= 60 else f"{eta_sec}秒"
+                msg = f"AIテロップ生成中... {pct}% (処理 {int(cur_end)}秒/{int(total_duration)}秒, 残り約{eta_str})"
+            else:
+                eta_sec = None
+                msg = f"AIテロップ生成中... {pct}% (処理 {int(cur_end)}秒/{int(total_duration)}秒)"
+            progress_callback(pct, eta_sec, msg)
+
+    if progress_callback:
+        progress_callback(100, 0, "AIテロップ生成完了 (100%)")
+
     return {
         "text": " ".join(full_text_list),
         "segments": items,
-        "language": info.language
+        "language": getattr(info, "language", language)
     }
 
 def generate_srt(segments, srt_path, offset_start=0.0):

@@ -57,5 +57,44 @@ class TestTranscriber(unittest.TestCase):
             self.assertEqual(results[0]["start"], 10.0)
             self.assertEqual(results[0]["end"], 15.0)
 
+    @unittest.mock.patch('transcriber.get_whisper_model')
+    def test_transcribe_progress_callback_and_eta(self, mock_get_model):
+        """Tests that transcribe_audio_file invokes progress_callback with percentages, ETA, and messages."""
+        from transcriber import transcribe_audio_file
+        
+        # Create mock segment items
+        class DummySegment:
+            def __init__(self, start, end, text):
+                self.start = start
+                self.end = end
+                self.text = text
+
+        dummy_segments = [
+            DummySegment(0.0, 30.0, "セグメント1"),
+            DummySegment(30.0, 60.0, "セグメント2"),
+            DummySegment(60.0, 100.0, "セグメント3")
+        ]
+        
+        class DummyInfo:
+            duration = 100.0
+            language = "ja"
+
+        mock_model = unittest.mock.MagicMock()
+        mock_model.transcribe.return_value = (dummy_segments, DummyInfo())
+        mock_get_model.return_value = mock_model
+
+        progress_calls = []
+        def my_callback(pct, eta, msg):
+            progress_calls.append((pct, eta, msg))
+
+        res = transcribe_audio_file("dummy.wav", progress_callback=my_callback)
+        self.assertEqual(len(res["segments"]), 3)
+        self.assertGreater(len(progress_calls), 0)
+        
+        # Check that progress reaches 100%
+        final_call = progress_calls[-1]
+        self.assertEqual(final_call[0], 100)
+        self.assertIn("100%", final_call[2])
+
 if __name__ == '__main__':
     unittest.main()

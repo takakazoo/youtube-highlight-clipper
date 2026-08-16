@@ -129,9 +129,14 @@ def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, vi
     # Now transcribe the audio for keyword search and highlight previews
     try:
         print("\nTranscribing full audio for search index & highlight previews...")
-        if progress_callback: progress_callback("AI文字起こし＆字幕テロップを生成中...")
+        if progress_callback: progress_callback("AI文字起こし＆字幕テロップを生成中 (0%)...")
         from transcriber import transcribe_audio_file, save_video_transcripts
-        trans_res = transcribe_audio_file(wav_path)
+        
+        def trans_cb(pct, eta, msg):
+            if progress_callback:
+                progress_callback(msg, pct=pct, eta_sec=eta)
+
+        trans_res = transcribe_audio_file(wav_path, progress_callback=trans_cb)
         all_segments = trans_res.get("segments", [])
         save_video_transcripts(video_url, all_segments)
 

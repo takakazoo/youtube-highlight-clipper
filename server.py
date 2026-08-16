@@ -27,6 +27,8 @@ CURRENT_DATA = {
     "video_id": "",
     "is_analyzing": False,
     "progress_msg": "URLを入力してください",
+    "progress_pct": 0,
+    "eta_sec": None,
     "error_msg": None
 }
 
@@ -40,6 +42,8 @@ if os.path.exists(HIGHLIGHTS_JSON):
                 CURRENT_DATA["video_id"] = extract_youtube_id(_saved_data["video_url"])
                 CURRENT_DATA["title"] = "解析済み動画"
                 CURRENT_DATA["progress_msg"] = "準備完了"
+                CURRENT_DATA["progress_pct"] = 100
+                CURRENT_DATA["eta_sec"] = 0
     except Exception:
         pass
 
@@ -116,15 +120,23 @@ def process_analysis_task(url, video_id):
         
         download_audio(url, audio_path)
 
+        CURRENT_DATA["progress_pct"] = 15
         CURRENT_DATA["progress_msg"] = "音声をWAV形式に変換中..."
         convert_to_wav(audio_path, wav_path)
 
-        def update_prog(msg):
+        def update_prog(msg, pct=None, eta_sec=None):
             CURRENT_DATA["progress_msg"] = msg
+            if pct is not None:
+                CURRENT_DATA["progress_pct"] = pct
+            if eta_sec is not None:
+                CURRENT_DATA["eta_sec"] = eta_sec
 
+        CURRENT_DATA["progress_pct"] = 25
         CURRENT_DATA["progress_msg"] = "盛り上がりシーンを自動解析中..."
         analyze_highlights(wav_path, video_url=url, progress_callback=update_prog)
 
+        CURRENT_DATA["progress_pct"] = 100
+        CURRENT_DATA["eta_sec"] = 0
         CURRENT_DATA["progress_msg"] = "解析完了"
         CURRENT_DATA["is_analyzing"] = False
     except Exception as e:
@@ -145,6 +157,8 @@ def analyze_new():
     CURRENT_DATA["video_id"] = v_id
     CURRENT_DATA["title"] = "読み込み中..."
     CURRENT_DATA["is_analyzing"] = True
+    CURRENT_DATA["progress_pct"] = 5
+    CURRENT_DATA["eta_sec"] = None
     CURRENT_DATA["progress_msg"] = "解析タスクを開始しました..."
     CURRENT_DATA["error_msg"] = None
 
