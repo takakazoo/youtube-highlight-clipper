@@ -1074,10 +1074,14 @@
       loadInfo();
       loadHighlights();
       loadClips();
+      loadTranscripts();
       setInterval(() => {
         loadInfo();
         loadHighlights();
         loadClips();
+        if (videoSegments.length === 0) {
+          loadTranscripts();
+        }
       }, 3000);
     };
   </script>

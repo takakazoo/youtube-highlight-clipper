@@ -30,6 +30,19 @@ CURRENT_DATA = {
     "error_msg": None
 }
 
+# Auto-restore state from highlights.json on server start
+if os.path.exists(HIGHLIGHTS_JSON):
+    try:
+        with open(HIGHLIGHTS_JSON, "r", encoding="utf-8") as f:
+            _saved_data = json.load(f)
+            if _saved_data.get("video_url"):
+                CURRENT_DATA["url"] = _saved_data["video_url"]
+                CURRENT_DATA["video_id"] = extract_youtube_id(_saved_data["video_url"])
+                CURRENT_DATA["title"] = "解析済み動画"
+                CURRENT_DATA["progress_msg"] = "準備完了"
+    except Exception:
+        pass
+
 def extract_youtube_id(url):
     # Regex to match youtube video ID from various URL formats
     patterns = [
@@ -147,14 +160,14 @@ def analyze_new():
 
 @app.route("/api/transcripts", methods=["GET"])
 def get_transcripts_endpoint():
-    current_url = CURRENT_DATA.get("url", "").strip()
-    if not current_url:
-        return jsonify({"segments": []})
     trans_file = os.path.join(BASE_DIR, "transcripts.json")
     if os.path.exists(trans_file):
-        with open(trans_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return jsonify(data)
+        try:
+            with open(trans_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return jsonify(data)
+        except Exception as e:
+            print("Error reading transcripts.json:", e)
     return jsonify({"segments": []})
 
 @app.route("/api/transcript_search", methods=["GET"])

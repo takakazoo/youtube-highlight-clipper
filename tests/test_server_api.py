@@ -97,5 +97,39 @@ class TestServerAPI(unittest.TestCase):
         res = self.client.delete('/api/clips/..%2F..%2Fsecret.txt')
         self.assertEqual(res.status_code, 404)
 
+    def test_transcripts_endpoint_returns_saved_segments_regardless_of_current_url(self):
+        """Tests that /api/transcripts reliably returns segments from transcripts.json even on clean startup."""
+        sample_trans = {
+            "video_url": "https://test.url",
+            "segments": [{"start": 1.0, "end": 5.0, "text": "テスト発話セグメント"}]
+        }
+        with patch('server.os.path.exists', return_value=True), \
+             patch('builtins.open', unittest.mock.mock_open(read_data=json.dumps(sample_trans))):
+            res = self.client.get('/api/transcripts')
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertIn("segments", data)
+            self.assertEqual(len(data["segments"]), 1)
+            self.assertEqual(data["segments"][0]["text"], "テスト発話セグメント")
+
+    @patch('server.generate_clip_by_segments')
+    def test_generate_clip_api_success_and_response(self, mock_clipper):
+        """Tests POST /api/generate_clip returns full download URLs and filename on success."""
+        mock_clipper.return_value = os.path.join(self.test_clips_dir, "テスト動画_00m10s-00m20s_123456.mp4")
+        
+        res = self.client.post('/api/generate_clip', json={
+            'start_sec': 10,
+            'end_sec': 20,
+            'url': 'https://www.youtube.com/watch?v=sample',
+            'generate_srt': True,
+            'burn_subtitles': False
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("filename", data)
+        self.assertIn("download_url", data)
+        self.assertEqual(data["srt_filename"], "テスト動画_00m10s-00m20s_123456.srt")
+
 if __name__ == '__main__':
     unittest.main()
