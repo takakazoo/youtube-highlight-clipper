@@ -17,12 +17,14 @@ HIGHLIGHTS_JSON = os.path.join(OUTPUT_DIR, "highlights.json")
 
 def download_audio(url, output_path):
     print("Downloading audio stream...")
+    ffmpeg_dir = os.path.dirname(FFMPEG_PATH)
     ydl_opts = {
-        'format': 'ba/b[ext=m4a]/bestaudio',
+        'format': 'bestaudio/best',
         'outtmpl': output_path,
         'overwrites': True,
         'quiet': False,
         'no_warnings': True,
+        'ffmpeg_location': ffmpeg_dir,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
