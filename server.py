@@ -143,13 +143,17 @@ def generate_clip():
     data = request.get_json(force=True) if request.is_json else request.form
     start_sec = float(data.get("start_sec", 0))
     end_sec = float(data.get("end_sec", 30))
+    url = data.get("url") or CURRENT_DATA.get("url", "").strip()
+
+    if not url:
+        return jsonify({"status": "error", "message": "動画URLが指定されていません。先に動画を解析してください。"}), 400
 
     start_m, start_s = int(start_sec // 60), int(start_sec % 60)
     end_m, end_s = int(end_sec // 60), int(end_sec % 60)
     filename = f"clip_{start_m:02d}m{start_s:02d}s_to_{end_m:02d}m{end_s:02d}s.mp4"
 
     try:
-        generate_clip_by_segments(start_sec, end_sec, filename, quality="720p", url=CURRENT_DATA.get("url", "https://www.youtube.com/watch?v=RJrGlRVA0-s"))
+        generate_clip_by_segments(start_sec, end_sec, filename, quality="720p", url=url)
         return jsonify({
             "status": "success",
             "filename": filename,
