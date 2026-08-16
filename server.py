@@ -92,8 +92,11 @@ def process_analysis_task(url, video_id):
         CURRENT_DATA["progress_msg"] = "音声をWAV形式に変換中..."
         convert_to_wav(audio_path, wav_path)
 
+        def update_prog(msg):
+            CURRENT_DATA["progress_msg"] = msg
+
         CURRENT_DATA["progress_msg"] = "盛り上がりシーンを自動解析中..."
-        analyze_highlights(wav_path, video_url=url)
+        analyze_highlights(wav_path, video_url=url, progress_callback=update_prog)
 
         CURRENT_DATA["progress_msg"] = "解析完了"
         CURRENT_DATA["is_analyzing"] = False

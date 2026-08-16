@@ -69,13 +69,11 @@ def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, vi
     step = int(clip_duration / 0.5)
     
     for i in range(0, len(score) - step, int(5 / 0.5)): # 5-second slide
-        segment_score = np.mean(score[i : i + step]) + np.max(score[i : i + step]) * 0.5
-        t_start = times[i]
-        peaks.append((segment_score, t_start))
+    for idx in peak_indices:
+        t = times[idx]
+        peaks.append((smoothed_score[idx], t))
 
-    # Sort peaks and apply non-maximum suppression (avoid overlapping clips)
-    peaks.sort(key=lambda x: x[0], reverse=True)
-    
+    # Filter distinct clips separated by min_interval
     selected_clips = []
     for sc, t in peaks:
         overlap = False
@@ -124,6 +122,7 @@ def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, vi
     # Now transcribe the audio for keyword search and highlight previews
     try:
         print("\nTranscribing full audio for search index & highlight previews...")
+        if progress_callback: progress_callback("AI文字起こし＆字幕テロップを生成中...")
         from transcriber import transcribe_audio_file, save_video_transcripts
         trans_res = transcribe_audio_file(wav_path)
         all_segments = trans_res.get("segments", [])

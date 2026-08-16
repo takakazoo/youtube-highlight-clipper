@@ -384,8 +384,8 @@
           <span>📺</span>
           <span>プレビュープレイヤー</span>
         </div>
-        <div class="player-container">
-          <iframe id="ytPlayer" src="" allowfullscreen></iframe>
+        <div id="ytPlayerContainer" class="player-container">
+          <div id="ytPlayer"></div>
         </div>
         
         <!-- Realtime Live Subtitle Bar (Synchronized with Video Time) -->
@@ -487,39 +487,57 @@
   <script>
     let CURRENT_VIDEO_ID = "";
     let ytPlayer = null;
-    let playbackInterval = null;
     let targetEndSec = null;
     let videoSegments = [];
+    let isApiReady = false;
 
     function onYouTubeIframeAPIReady() {
-      ytPlayer = new YT.Player('ytPlayer', {
-        events: {
-          'onReady': onPlayerReady,
-          'onStateChange': onPlayerStateChange
+      isApiReady = true;
+      if (CURRENT_VIDEO_ID) {
+        initOrUpdatePlayer(CURRENT_VIDEO_ID);
+      }
+      startGlobalPlaybackWatcher();
+    }
+
+    function initOrUpdatePlayer(videoId) {
+      if (!videoId) return;
+      if (!ytPlayer) {
+        ytPlayer = new YT.Player('ytPlayer', {
+          height: '100%',
+          width: '100%',
+          videoId: videoId,
+          playerVars: {
+            enablejsapi: 1,
+            origin: window.location.origin,
+            rel: 0
+          },
+          events: {
+            'onReady': () => { startGlobalPlaybackWatcher(); }
+          }
+        });
+      } else {
+        if (ytPlayer.cueVideoById) {
+          ytPlayer.cueVideoById(videoId);
         }
-      });
+      }
     }
 
-    function onPlayerReady(event) {
-      // Player ready
-    }
-
-    function onPlayerStateChange(event) {
-      clearInterval(playbackInterval);
-      if (event.data === YT.PlayerState.PLAYING) {
-        playbackInterval = setInterval(() => {
-          if (ytPlayer && ytPlayer.getCurrentTime) {
+    function startGlobalPlaybackWatcher() {
+      // Periodic ticker to sync subtitle with current video time continuously
+      setInterval(() => {
+        if (ytPlayer && ytPlayer.getCurrentTime && typeof ytPlayer.getPlayerState === 'function') {
+          const state = ytPlayer.getPlayerState();
+          if (state === 1) { // 1 = YT.PlayerState.PLAYING
             const cur = ytPlayer.getCurrentTime();
             updateLiveSubtitle(cur);
 
             if (targetEndSec !== null && cur >= targetEndSec) {
               ytPlayer.pauseVideo();
               targetEndSec = null;
-              clearInterval(playbackInterval);
             }
           }
-        }, 150);
-      }
+        }
+      }, 100);
     }
 
     function updateLiveSubtitle(currentTime) {
@@ -537,13 +555,12 @@
         return;
       }
 
-      // Find segment matching current time
-      const match = videoSegments.find(s => currentTime >= s.start && currentTime <= s.end);
+      // Find segment matching current time (with slight tolerance)
+      const match = videoSegments.find(s => currentTime >= (s.start - 0.2) && currentTime <= (s.end + 0.2));
       if (match) {
         textElem.innerHTML = `<span style="color: #fbbf24; font-size: 0.8rem; margin-right: 0.4rem;">[${Math.floor(currentTime)}秒]</span> <strong style="color: #ffffff; font-size: 1.05rem;">${match.text}</strong>`;
         container.style.borderColor = 'var(--accent-primary)';
       } else {
-        // Find nearest or show idle
         textElem.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">🎵 [${Math.floor(currentTime)}秒] (発話なし / BGM)</span>`;
         container.style.borderColor = 'rgba(255, 255, 255, 0.1)';
       }
@@ -553,7 +570,7 @@
       try {
         const res = await fetch('/api/transcripts');
         const data = await res.json();
-        if (data.segments) {
+        if (data.segments && data.segments.length > 0) {
           videoSegments = data.segments;
         }
       } catch (e) {
@@ -578,13 +595,8 @@
         if (data.video_id) {
           if (CURRENT_VIDEO_ID !== data.video_id) {
             CURRENT_VIDEO_ID = data.video_id;
-            if (ytPlayer && ytPlayer.loadVideoById) {
-              ytPlayer.cueVideoById(data.video_id);
-            } else {
-              const iframe = document.getElementById('ytPlayer');
-              if (iframe) {
-                iframe.src = `https://www.youtube.com/embed/${data.video_id}?enablejsapi=1`;
-              }
+            if (isApiReady) {
+              initOrUpdatePlayer(data.video_id);
             }
           }
           document.getElementById('videoTag').innerText = `🎬 ${data.title}`;
@@ -826,9 +838,16 @@
         data.highlights.forEach(hl => {
           const card = document.createElement('div');
           card.className = 'highlight-card';
-          const transcriptHtml = hl.transcript ? `
+          
+          let text = hl.transcript || '';
+          if (!text && videoSegments && videoSegments.length > 0) {
+            const matched = videoSegments.filter(s => !(s.end < hl.start_seconds || s.start > hl.end_seconds));
+            text = matched.map(s => s.text).join(' ');
+          }
+
+          const transcriptHtml = text ? `
             <div class="highlight-transcript" style="display: ${showTranscript ? 'block' : 'none'}; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); background: rgba(255,255,255,0.03); border-left: 2px solid var(--accent-primary); padding: 0.3rem 0.6rem; border-radius: 0 4px 4px 0;">
-              💬 <em>"${hl.transcript}"</em>
+              💬 <em>"${text}"</em>
             </div>
           ` : '';
 
