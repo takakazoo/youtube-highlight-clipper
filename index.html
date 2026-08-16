@@ -391,7 +391,7 @@
         <!-- Manual Range Section -->
         <div class="manual-controls">
           <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;">⏱ 自由な時間指定で切り抜き</div>
-          <div class="controls-grid">
+          <div class="controls-grid" style="grid-template-columns: 1fr 1fr auto auto;">
             <div class="form-group">
               <label for="inputStart">開始時間 (秒 or mm:ss)</label>
               <input type="text" id="inputStart" class="form-input" placeholder="00:00" value="00:00">
@@ -400,6 +400,9 @@
               <label for="inputEnd">終了時間 (秒 or mm:ss)</label>
               <input type="text" id="inputEnd" class="form-input" placeholder="00:45" value="00:45">
             </div>
+            <button class="btn btn-secondary" onclick="previewManualRange()" title="指定した区間を再生（終了時間で自動停止）">
+              <span>▶ プレビュー</span>
+            </button>
             <button id="btnManualGenerate" class="btn" onclick="generateManualClip()">
               <span>切り抜き生成</span>
             </button>
@@ -438,10 +441,45 @@
     </div>
   </main>
 
-  <div id="statusToast" class="status-toast"></div>
-
+  <script src="https://www.youtube.com/iframe_api"></script>
   <script>
     let CURRENT_VIDEO_ID = "";
+    let ytPlayer = null;
+    let stopCheckInterval = null;
+    let targetEndSec = null;
+
+    function onYouTubeIframeAPIReady() {
+      ytPlayer = new YT.Player('ytPlayer', {
+        events: {
+          'onReady': onPlayerReady,
+          'onStateChange': onPlayerStateChange
+        }
+      });
+    }
+
+    function onPlayerReady(event) {
+      // Player ready
+    }
+
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.PLAYING) {
+        if (targetEndSec !== null) {
+          clearInterval(stopCheckInterval);
+          stopCheckInterval = setInterval(() => {
+            if (ytPlayer && ytPlayer.getCurrentTime) {
+              const cur = ytPlayer.getCurrentTime();
+              if (cur >= targetEndSec) {
+                ytPlayer.pauseVideo();
+                targetEndSec = null;
+                clearInterval(stopCheckInterval);
+              }
+            }
+          }, 200);
+        }
+      } else {
+        clearInterval(stopCheckInterval);
+      }
+    }
 
     function showToast(msg) {
       const toast = document.getElementById('statusToast');
@@ -460,9 +498,13 @@
         if (data.video_id) {
           if (CURRENT_VIDEO_ID !== data.video_id) {
             CURRENT_VIDEO_ID = data.video_id;
-            const iframe = document.getElementById('ytPlayer');
-            if (iframe && (!iframe.src || !iframe.src.includes(data.video_id))) {
-              iframe.src = `https://www.youtube.com/embed/${data.video_id}?enablejsapi=1`;
+            if (ytPlayer && ytPlayer.loadVideoById) {
+              ytPlayer.cueVideoById(data.video_id);
+            } else {
+              const iframe = document.getElementById('ytPlayer');
+              if (iframe) {
+                iframe.src = `https://www.youtube.com/embed/${data.video_id}?enablejsapi=1`;
+              }
             }
           }
           document.getElementById('videoTag').innerText = `🎬 ${data.title}`;
@@ -521,7 +563,11 @@
         
         if (res.ok && data.status === 'started') {
           CURRENT_VIDEO_ID = data.video_id;
-          document.getElementById('ytPlayer').src = `https://www.youtube.com/embed/${data.video_id}?enablejsapi=1`;
+          if (ytPlayer && ytPlayer.loadVideoById) {
+            ytPlayer.cueVideoById(data.video_id);
+          } else {
+            document.getElementById('ytPlayer').src = `https://www.youtube.com/embed/${data.video_id}?enablejsapi=1`;
+          }
           showToast("新しい動画の音声ダウンロード＆盛り上がり解析を開始しました");
           loadInfo();
           loadHighlights();
@@ -548,9 +594,37 @@
       return 0;
     }
 
-    function seekTo(seconds) {
-      const iframe = document.getElementById('ytPlayer');
-      iframe.src = `https://www.youtube.com/embed/${CURRENT_VIDEO_ID}?start=${Math.floor(seconds)}&autoplay=1`;
+    function playRange(startSec, endSec) {
+      targetEndSec = endSec;
+      if (ytPlayer && ytPlayer.loadVideoById) {
+        ytPlayer.loadVideoById({
+          videoId: CURRENT_VIDEO_ID,
+          startSeconds: startSec,
+          endSeconds: endSec
+        });
+      } else {
+        const iframe = document.getElementById('ytPlayer');
+        iframe.src = `https://www.youtube.com/embed/${CURRENT_VIDEO_ID}?start=${Math.floor(startSec)}&end=${Math.ceil(endSec)}&autoplay=1&enablejsapi=1`;
+      }
+    }
+
+    function previewHighlight(startSec, endSec, startStr, endStr) {
+      document.getElementById('inputStart').value = startStr;
+      document.getElementById('inputEnd').value = endStr;
+      playRange(startSec, endSec);
+    }
+
+    function previewManualRange() {
+      const startStr = document.getElementById('inputStart').value;
+      const endStr = document.getElementById('inputEnd').value;
+      const startSec = parseTimeToSeconds(startStr);
+      const endSec = parseTimeToSeconds(endStr);
+
+      if (endSec <= startSec) {
+        alert("終了時間は開始時間より後に設定してください");
+        return;
+      }
+      playRange(startSec, endSec);
     }
 
     async function loadHighlights() {
@@ -584,7 +658,7 @@
               <div class="highlight-time">${hl.start_time_str} - ${hl.end_time_str} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">(${hl.duration}秒)</span></div>
             </div>
             <div class="highlight-actions">
-              <button class="btn btn-secondary btn-sm" onclick="previewHighlight(${hl.start_seconds}, '${hl.start_time_str}', '${hl.end_time_str}')">再生</button>
+              <button class="btn btn-secondary btn-sm" onclick="previewHighlight(${hl.start_seconds}, ${hl.end_seconds}, '${hl.start_time_str}', '${hl.end_time_str}')">再生</button>
               <button class="btn btn-sm" id="btn-clip-${hl.id}" onclick="generateClipFromHighlight(${hl.id}, ${hl.start_seconds}, ${hl.end_seconds})">切り抜く</button>
             </div>
           `;
@@ -593,12 +667,6 @@
       } catch (e) {
         container.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 2rem;">データ取得エラー</div>`;
       }
-    }
-
-    function previewHighlight(startSec, startStr, endStr) {
-      seekTo(startSec);
-      document.getElementById('inputStart').value = startStr;
-      document.getElementById('inputEnd').value = endStr;
     }
 
     async function generateClipFromHighlight(id, startSec, endSec) {
