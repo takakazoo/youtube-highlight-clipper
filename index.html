@@ -882,11 +882,14 @@
 
       showToast(`ハイライト #${id} の切り抜き動画を生成しています...`);
 
+      const videoUrl = document.getElementById('inputVideoUrl').value.trim();
+
       try {
         const res = await fetch('/api/generate_clip', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
+            url: videoUrl,
             start_sec: startSec,
             end_sec: endSec,
             generate_srt: genSrt,
@@ -927,11 +930,14 @@
 
       showToast(`切り抜き動画（${startStr} - ${endStr}）を生成中...`);
 
+      const videoUrl = document.getElementById('inputVideoUrl').value.trim();
+
       try {
         const res = await fetch('/api/generate_clip', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
+            url: videoUrl,
             start_sec: startSec,
             end_sec: endSec,
             generate_srt: genSrt,

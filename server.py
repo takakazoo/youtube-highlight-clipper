@@ -203,6 +203,8 @@ def generate_clip():
             "srt_download_url": f"/clips/{srt_name}" if srt_name else None
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":

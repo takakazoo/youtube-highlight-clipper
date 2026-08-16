@@ -34,7 +34,7 @@ def download_audio(url, output_path):
 def convert_to_wav(input_path, output_path):
     print("Converting audio to 16kHz mono WAV for analysis...")
     cmd = [FFMPEG_PATH, "-y", "-i", input_path, "-ar", "16000", "-ac", "1", output_path]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if res.returncode != 0:
         print("FFmpeg stderr:", res.stderr)
         raise RuntimeError("FFmpeg audio conversion failed.")

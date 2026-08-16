@@ -126,7 +126,7 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
         "-c:a", "aac", "-b:a", "192k",
         temp_trimmed_mp4
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if res.returncode != 0:
         print("FFmpeg trim error:", res.stderr)
         raise RuntimeError("FFmpeg trim failed")

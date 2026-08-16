@@ -87,7 +87,7 @@ def burn_subtitles_to_video(video_path, srt_path, output_path):
         "-c:a", "copy",
         output_path
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if res.returncode != 0:
         print("FFmpeg subtitle burn error:", res.stderr)
         raise RuntimeError("Failed to burn subtitles into video.")
