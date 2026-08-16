@@ -51,6 +51,20 @@ def get_unique_filepath(directory, filename):
         counter += 1
     return os.path.join(directory, current_name)
 
+def ensure_ffmpeg_setup():
+    """Ensures ffmpeg.exe exists in imageio_ffmpeg directory and PATH."""
+    ffmpeg_dir = os.path.dirname(FFMPEG_EXE)
+    ffmpeg_bin = os.path.join(ffmpeg_dir, "ffmpeg.exe")
+    if not os.path.exists(ffmpeg_bin):
+        try:
+            import shutil
+            shutil.copyfile(FFMPEG_EXE, ffmpeg_bin)
+        except Exception:
+            pass
+    if ffmpeg_dir not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+    return ffmpeg_dir
+
 def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=None, title=None, generate_srt=False, burn_subtitles=False):
     if not url:
         hl_file = os.path.join(BASE_DIR, "highlights.json")
@@ -61,6 +75,7 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
         if not url:
             raise ValueError("Video URL must be provided.")
     
+    ffmpeg_dir = ensure_ffmpeg_setup()
     info = get_manifest_info(url)
     video_title = title or info.get('title', 'clip')
 
@@ -82,64 +97,34 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
     base_name, ext = os.path.splitext(output_filename)
 
     print(f"\n[Clip Generator] Extracting {start_sec}s - {end_sec}s -> {output_filename}")
-    
-    # 298 (720p), 299 (1080p), or 135 (480p)
-    target_itag = '298' if quality == '720p' else '299'
-    video_format = next((f for f in info.get('formats', []) if f['format_id'] == target_itag), None)
-    if not video_format:
-        video_format = next(f for f in info.get('formats', []) if f['format_id'] == '135')
-    
-    audio_format = next(f for f in info.get('formats', []) if f['format_id'] == '140')
-
-    video_frags = video_format.get('fragments', [])
-    audio_frags = audio_format.get('fragments', [])
-
-    start_idx = max(0, int(start_sec // 5))
-    end_idx = min(len(video_frags) - 1, int(end_sec // 5) + 1)
-
-    print(f"Downloading segments from sq={start_idx} to sq={end_idx}...")
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-
-    raw_v_path = os.path.join(TEMP_DIR, f"stream_{start_idx}_{end_idx}.m4v")
-    raw_a_path = os.path.join(TEMP_DIR, f"stream_{start_idx}_{end_idx}.m4a")
-
-    with open(raw_v_path, "wb") as f_v:
-        for sq in range(start_idx, end_idx + 1):
-            req = urllib.request.Request(video_frags[sq]['url'], headers=headers)
-            with urllib.request.urlopen(req) as resp:
-                f_v.write(resp.read())
-
-    with open(raw_a_path, "wb") as f_a:
-        for sq in range(start_idx, end_idx + 1):
-            req = urllib.request.Request(audio_frags[sq]['url'], headers=headers)
-            with urllib.request.urlopen(req) as resp:
-                f_a.write(resp.read())
-
-    base_time = start_idx * 5.0
-    offset = max(0, start_sec - base_time)
-    duration = end_sec - start_sec
-
-    print(f"Trimming precise section: offset={offset:.2f}s, duration={duration:.2f}s...")
 
     temp_trimmed_mp4 = os.path.join(TEMP_DIR, f"trimmed_{output_filename}") if burn_subtitles else output_path
+    if os.path.exists(temp_trimmed_mp4):
+        os.remove(temp_trimmed_mp4)
 
-    cmd = [
-        FFMPEG_EXE, "-y",
-        "-ss", f"{offset:.2f}",
-        "-i", raw_v_path,
-        "-ss", f"{offset:.2f}",
-        "-i", raw_a_path,
-        "-t", f"{duration:.2f}",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-c:a", "aac", "-b:a", "192k",
-        temp_trimmed_mp4
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if res.returncode != 0:
-        print("FFmpeg trim error:", res.stderr)
-        raise RuntimeError("FFmpeg trim failed")
+    # 1. Download specific time section using yt-dlp's native partial downloader
+    ydl_opts = {
+        'ffmpeg_location': ffmpeg_dir,
+        'download_ranges': yt_dlp.utils.download_range_func(None, [(start_sec, end_sec)]),
+        'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
+        'outtmpl': temp_trimmed_mp4,
+        'merge_output_format': 'mp4',
+        'force_keyframes_at_cuts': True,
+        'quiet': True,
+        'no_warnings': True
+    }
 
-    # Transcription / SRT processing if requested
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception as e:
+        print("yt-dlp download error:", e)
+        raise RuntimeError(f"Failed to download clip section: {e}")
+
+    if not os.path.exists(temp_trimmed_mp4):
+        raise RuntimeError(f"Clip file was not created: {temp_trimmed_mp4}")
+
+    # 2. Transcription / SRT processing if requested
     srt_path = os.path.join(CLIPS_DIR, f"{base_name}.srt")
     if generate_srt or burn_subtitles:
         try:
@@ -161,18 +146,9 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
                     os.remove(temp_trimmed_mp4)
         except Exception as e:
             print("[Warning] Subtitle generation error:", e)
-            # If subtitle burn failed, fallback to trimmed mp4
             if burn_subtitles and os.path.exists(temp_trimmed_mp4) and not os.path.exists(output_path):
                 import shutil
                 shutil.move(temp_trimmed_mp4, output_path)
-
-    # Cleanup temp segment stream files
-    for f in [raw_v_path, raw_a_path]:
-        try:
-            if os.path.exists(f):
-                os.remove(f)
-        except Exception:
-            pass
 
     file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
     print(f"[Success] Clip generated successfully: {output_path} ({file_size} bytes)")
