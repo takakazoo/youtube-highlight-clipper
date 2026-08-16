@@ -580,13 +580,20 @@
         return;
       }
 
-      // Find segment matching current time (with slight tolerance)
-      const match = videoSegments.find(s => currentTime >= (s.start - 0.2) && currentTime <= (s.end + 0.2));
+      // 1. Direct match with current time (tolerance ±0.2s, plus 1.5s lingering hold time)
+      const match = videoSegments.find(s => currentTime >= (s.start - 0.2) && currentTime <= (s.end + 1.5));
       if (match) {
         textElem.innerHTML = `<span style="color: #fbbf24; font-size: 0.8rem; margin-right: 0.4rem;">[${Math.floor(currentTime)}秒]</span> <strong style="color: #ffffff; font-size: 1.05rem;">${match.text}</strong>`;
         container.style.borderColor = 'var(--accent-primary)';
       } else {
-        textElem.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">🎵 [${Math.floor(currentTime)}秒] (発話なし / BGM)</span>`;
+        // Find next upcoming speech segment
+        const upcoming = videoSegments.find(s => s.start > currentTime);
+        if (upcoming && (upcoming.start - currentTime) <= 8.0) {
+          const diff = (upcoming.start - currentTime).toFixed(1);
+          textElem.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">🎵 [${Math.floor(currentTime)}秒] (次のセリフまであと ${diff}秒: 「${upcoming.text}」)</span>`;
+        } else {
+          textElem.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">🎵 [${Math.floor(currentTime)}秒] (発話なし / BGM)</span>`;
+        }
         container.style.borderColor = 'rgba(255, 255, 255, 0.1)';
       }
     }
@@ -923,9 +930,8 @@
       const genSrt = document.getElementById('toggleGenerateSrt').checked;
       const burnSub = document.getElementById('toggleBurnSubtitles').checked;
 
-      showToast(`ハイライト #${id} の切り抜き動画を生成しています...`);
-
-      const videoUrl = document.getElementById('inputVideoUrl').value.trim();
+      const inputVal = document.getElementById('inputVideoUrl').value.trim();
+      const videoUrl = inputVal || (CURRENT_VIDEO_ID ? `https://www.youtube.com/watch?v=${CURRENT_VIDEO_ID}` : '');
 
       try {
         const res = await fetch('/api/generate_clip', {
@@ -940,14 +946,14 @@
           })
         });
         const data = await res.json();
-        if (data.status === 'success') {
-          showToast(`切り抜きが完了しました: ${data.filename}`);
+        if (res.ok && data.status === 'success') {
+          showToast(`✅ 切り抜き完了: ${data.filename}`);
           loadClips();
         } else {
-          showToast(`エラー: ${data.message}`);
+          showToast(`❌ 切り抜きエラー: ${data.message || '生成に失敗しました'}`);
         }
       } catch (err) {
-        showToast("生成リクエストに失敗しました");
+        showToast(`❌ 通信エラー: ${err.message}`);
       } finally {
         btn.innerText = oldText;
         btn.disabled = false;
@@ -973,7 +979,8 @@
 
       showToast(`切り抜き動画（${startStr} - ${endStr}）を生成中...`);
 
-      const videoUrl = document.getElementById('inputVideoUrl').value.trim();
+      const inputVal = document.getElementById('inputVideoUrl').value.trim();
+      const videoUrl = inputVal || (CURRENT_VIDEO_ID ? `https://www.youtube.com/watch?v=${CURRENT_VIDEO_ID}` : '');
 
       try {
         const res = await fetch('/api/generate_clip', {
@@ -988,14 +995,14 @@
           })
         });
         const data = await res.json();
-        if (data.status === 'success') {
-          showToast(`切り抜きが完了しました: ${data.filename}`);
+        if (res.ok && data.status === 'success') {
+          showToast(`✅ 切り抜き完了: ${data.filename}`);
           loadClips();
         } else {
-          showToast(`エラー: ${data.message}`);
+          showToast(`❌ 切り抜きエラー: ${data.message || '生成に失敗しました'}`);
         }
       } catch (err) {
-        showToast("生成リクエストに失敗しました");
+        showToast(`❌ 通信エラー: ${err.message}`);
       } finally {
         btn.innerText = "切り抜き生成";
         btn.disabled = false;

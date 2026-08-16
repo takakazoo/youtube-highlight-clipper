@@ -1,16 +1,22 @@
 import json
 import unittest
 
-def match_live_subtitle(current_time, video_segments, tolerance=0.2):
+def match_live_subtitle(current_time, video_segments, tolerance=0.2, hold_time=1.5):
     """
     Python implementation of the frontend live subtitle matching logic in index.html:
-    currentTime >= (s.start - 0.2) && currentTime <= (s.end + 0.2)
+    currentTime >= (s.start - 0.2) && currentTime <= (s.end + 1.5)
     """
     if not video_segments:
         return None
     for seg in video_segments:
-        if (seg["start"] - tolerance) <= current_time <= (seg["end"] + tolerance):
+        if (seg["start"] - tolerance) <= current_time <= (seg["end"] + hold_time):
             return seg["text"]
+    
+    # Check upcoming hint
+    for seg in video_segments:
+        if seg["start"] > current_time and (seg["start"] - current_time) <= 8.0:
+            diff = round(seg["start"] - current_time, 1)
+            return f"UPCOMING:{diff}:{seg['text']}"
     return None
 
 def process_youtube_postmessage(raw_data_str, target_end_sec):
@@ -54,13 +60,19 @@ class TestSubtitleSync(unittest.TestCase):
         text = match_live_subtitle(9.9, self.sample_segments, tolerance=0.2)
         self.assertEqual(text, "はじめまして、よろしくおねがいします。")
 
-        # Just after end (15.15s)
-        text = match_live_subtitle(15.15, self.sample_segments, tolerance=0.2)
-        self.assertEqual(text, "はじめまして、よろしくおねがいします。")
+    def test_live_subtitle_lingering_hold_and_upcoming_hint(self):
+        """Tests subtitle lingering hold time (1.5s after end) and upcoming speech hint."""
+        # Lingering hold 1.0s after end (16.0s for 15.0s end) -> matches previous utterance smoothly
+        text_held = match_live_subtitle(15.8, self.sample_segments)
+        self.assertEqual(text_held, "はじめまして、よろしくおねがいします。")
+
+        # Upcoming hint at 25.0s (next utterance starts at 30.0s, diff = 5.0s)
+        hint = match_live_subtitle(25.0, self.sample_segments)
+        self.assertEqual(hint, "UPCOMING:5.0:うわあああ！びっくりした！")
 
     def test_live_subtitle_no_speech_gap(self):
-        """Tests returns None when current time falls into silence / BGM interval."""
-        text = match_live_subtitle(25.0, self.sample_segments)
+        """Tests returns None when current time falls into silence / BGM interval (beyond 8s to next speech)."""
+        text = match_live_subtitle(50.0, self.sample_segments)
         self.assertIsNone(text)
 
     def test_postmessage_time_and_pause_trigger(self):
