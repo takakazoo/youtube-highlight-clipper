@@ -69,9 +69,12 @@ def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, vi
     step = int(clip_duration / 0.5)
     
     for i in range(0, len(score) - step, int(5 / 0.5)): # 5-second slide
-    for idx in peak_indices:
-        t = times[idx]
-        peaks.append((smoothed_score[idx], t))
+        segment_score = np.mean(score[i : i + step]) + np.max(score[i : i + step]) * 0.5
+        t_start = times[i]
+        peaks.append((segment_score, t_start))
+
+    # Sort peaks and apply non-maximum suppression (avoid overlapping clips)
+    peaks.sort(key=lambda x: x[0], reverse=True)
 
     # Filter distinct clips separated by min_interval
     selected_clips = []
