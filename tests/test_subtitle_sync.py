@@ -94,7 +94,36 @@ class TestSubtitleSync(unittest.TestCase):
         })
         res_pause = process_youtube_postmessage(msg_payload_reached, target_end_sec=20.0)
         self.assertIsNotNone(res_pause)
+        self.assertEqual(res_pause["currentTime"], 20.1)
         self.assertTrue(res_pause["should_pause"])
+
+    def test_continuous_playback_timeline_progression(self):
+        """Tests that subtitles dynamically change and progress continuously as playback time advances (no freezing on first speech)."""
+        timeline_outputs = []
+        # Simulate continuous 100ms ticker playback from 9.0s to 32.0s
+        for t_int in range(90, 330, 5): # 9.0s to 32.5s with 0.5s step
+            t = t_int / 10.0
+            sub = match_live_subtitle(t, self.sample_segments)
+            timeline_outputs.append((t, sub))
+
+        # 1. At 10.0s, speech 1 is active
+        self.assertEqual(match_live_subtitle(10.5, self.sample_segments), "はじめまして、よろしくおねがいします。")
+
+        # 2. At 15.5s, speech 1 is held
+        self.assertEqual(match_live_subtitle(15.5, self.sample_segments), "はじめまして、よろしくおねがいします。")
+
+        # 3. At 17.0s, speech 2 is active (switched!)
+        self.assertEqual(match_live_subtitle(17.0, self.sample_segments), "今日はホラーゲームを実況します。")
+
+        # 4. At 25.0s, upcoming hint for speech 3 is shown
+        self.assertIn("UPCOMING:5.0", match_live_subtitle(25.0, self.sample_segments))
+
+        # 5. At 31.0s, speech 3 is active
+        self.assertEqual(match_live_subtitle(31.0, self.sample_segments), "うわあああ！びっくりした！")
+
+        # Verify that subtitle state evolved and did not remain stuck on speech 1
+        distinct_subtitles = set(sub for _, sub in timeline_outputs if sub is not None)
+        self.assertGreaterEqual(len(distinct_subtitles), 4)
 
 if __name__ == '__main__':
     unittest.main()

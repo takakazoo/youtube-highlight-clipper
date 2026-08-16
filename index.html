@@ -528,17 +528,11 @@
         if (data && data.event === 'infoDelivery' && data.info) {
           if (typeof data.info.currentTime === 'number') {
             const cur = data.info.currentTime;
+            currentVirtualTime = cur;
             updateLiveSubtitle(cur);
 
             if (targetEndSec !== null && cur >= targetEndSec) {
-              const iframe = document.getElementById('ytPlayer');
-              if (iframe && iframe.contentWindow) {
-                iframe.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'pauseVideo', args: ''}), '*');
-              }
-              if (ytPlayer && ytPlayer.pauseVideo) {
-                ytPlayer.pauseVideo();
-              }
-              targetEndSec = null;
+              pausePlayback();
             }
           }
         }
@@ -727,13 +721,53 @@
       return 0;
     }
 
+    let localPlayTicker = null;
+    let currentVirtualTime = 0;
+
     function playRange(startSec, endSec) {
       targetEndSec = endSec;
+      currentVirtualTime = startSec;
       updateLiveSubtitle(startSec);
-      
+
+      if (localPlayTicker) clearInterval(localPlayTicker);
+
+      // Start local ticker as backup to ensure continuous real-time subtitle updates
+      localPlayTicker = setInterval(() => {
+        if (targetEndSec !== null && currentVirtualTime < targetEndSec) {
+          currentVirtualTime += 0.1;
+          updateLiveSubtitle(currentVirtualTime);
+          if (currentVirtualTime >= targetEndSec) {
+            pausePlayback();
+          }
+        }
+      }, 100);
+
       const iframe = document.getElementById('ytPlayer');
-      if (iframe && CURRENT_VIDEO_ID) {
-        iframe.src = `https://www.youtube.com/embed/${CURRENT_VIDEO_ID}?start=${Math.floor(startSec)}&end=${Math.ceil(endSec)}&autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+      if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+        ytPlayer.seekTo(startSec, true);
+        ytPlayer.playVideo();
+      } else if (iframe && iframe.contentWindow) {
+        // Send postMessage seek/play commands
+        iframe.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'seekTo', args: [startSec, true]}), '*');
+        iframe.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'playVideo', args: ''}), '*');
+        if (!iframe.src || !iframe.src.includes(CURRENT_VIDEO_ID)) {
+          iframe.src = `https://www.youtube.com/embed/${CURRENT_VIDEO_ID}?start=${Math.floor(startSec)}&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+        }
+      }
+    }
+
+    function pausePlayback() {
+      if (localPlayTicker) {
+        clearInterval(localPlayTicker);
+        localPlayTicker = null;
+      }
+      targetEndSec = null;
+      const iframe = document.getElementById('ytPlayer');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'pauseVideo', args: ''}), '*');
+      }
+      if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
+        try { ytPlayer.pauseVideo(); } catch (e) {}
       }
     }
 

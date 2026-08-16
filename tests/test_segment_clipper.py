@@ -96,5 +96,46 @@ class TestSegmentClipper(unittest.TestCase):
             self.assertIn("テスト動画タイトル", os.path.basename(out_file))
             self.assertIn("00m05s-00m12s", os.path.basename(out_file))
 
+    @patch('segment_clipper.get_manifest_info')
+    @patch('segment_clipper.yt_dlp.YoutubeDL')
+    def test_ydl_opts_configuration_anti_403(self, mock_ydl_cls, mock_manifest):
+        """Tests that ydl_opts contains critical headers and player_client configuration to prevent 403 Forbidden."""
+        from segment_clipper import generate_clip_by_segments
+        mock_manifest.return_value = {'title': 'テスト動画'}
+        
+        captured_opts = {}
+        def fake_ydl_init(opts):
+            nonlocal captured_opts
+            captured_opts = opts
+            mock_inst = MagicMock()
+            def fake_dl(urls):
+                with open(os.path.join(self.test_dir, "test.mp4"), "w") as f:
+                    f.write("dummy")
+            mock_inst.download.side_effect = fake_dl
+            mock_inst.__enter__.return_value = mock_inst
+            return mock_inst
+
+        mock_ydl_cls.side_effect = fake_ydl_init
+
+        with patch('segment_clipper.CLIPS_DIR', self.test_dir), \
+             patch('segment_clipper.TEMP_DIR', self.test_dir):
+            generate_clip_by_segments(
+                start_sec=0.0,
+                end_sec=10.0,
+                output_filename="test.mp4",
+                url="https://www.youtube.com/watch?v=test",
+                generate_srt=False,
+                burn_subtitles=False
+            )
+
+        # Assert critical anti-403 and FFmpeg settings
+        self.assertIn("http_headers", captured_opts)
+        self.assertIn("User-Agent", captured_opts["http_headers"])
+        self.assertIn("extractor_args", captured_opts)
+        self.assertIn("youtube", captured_opts["extractor_args"])
+        self.assertIn("player_client", captured_opts["extractor_args"]["youtube"])
+        self.assertEqual(captured_opts.get("legacy_server_connect"), True)
+        self.assertEqual(captured_opts.get("force_keyframes_at_cuts"), False)
+
 if __name__ == '__main__':
     unittest.main()
