@@ -55,5 +55,36 @@ class TestSegmentClipper(unittest.TestCase):
         third_path = get_unique_filepath(self.test_dir, filename)
         self.assertEqual(os.path.basename(third_path), "test_00m20s-00m45s_123456_2.mp4")
 
+    @patch('segment_clipper.get_manifest_info')
+    @patch('segment_clipper.subprocess.run')
+    @patch('segment_clipper.urllib.request.urlopen')
+    def test_generate_clip_by_segments_naming_and_imports(self, mock_urlopen, mock_run, mock_manifest):
+        """Tests generate_clip_by_segments runs without NameError/ImportError and names clip properly."""
+        from segment_clipper import generate_clip_by_segments
+        mock_manifest.return_value = {
+            'title': 'テスト動画タイトル',
+            'formats': [
+                {'format_id': '298', 'fragments': [{'url': 'http://frag1'}, {'url': 'http://frag2'}, {'url': 'http://frag3'}]},
+                {'format_id': '140', 'fragments': [{'url': 'http://afrag1'}, {'url': 'http://afrag2'}, {'url': 'http://afrag3'}]}
+            ]
+        }
+        mock_resp = MagicMock()
+        mock_resp.__enter__.return_value.read.return_value = b'dummy_video_fragment'
+        mock_urlopen.return_value = mock_resp
+        mock_run.return_value = MagicMock(returncode=0)
+
+        with patch('segment_clipper.CLIPS_DIR', self.test_dir), \
+             patch('segment_clipper.TEMP_DIR', self.test_dir):
+            out_file = generate_clip_by_segments(
+                start_sec=5.0,
+                end_sec=12.0,
+                url="https://www.youtube.com/watch?v=sample",
+                generate_srt=False,
+                burn_subtitles=False
+            )
+            self.assertTrue(out_file.endswith(".mp4"))
+            self.assertIn("テスト動画タイトル", os.path.basename(out_file))
+            self.assertIn("00m05s-00m12s", os.path.basename(out_file))
+
 if __name__ == '__main__':
     unittest.main()

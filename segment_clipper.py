@@ -3,6 +3,8 @@ import sys
 import json
 import urllib.request
 import subprocess
+import datetime
+from datetime import datetime
 import yt_dlp
 import imageio_ffmpeg
 
@@ -69,7 +71,7 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
         st_s = int(start_sec % 60)
         et_m = int(end_sec // 60)
         et_s = int(end_sec % 60)
-        now_str = datetime.datetime.now().strftime("%H%M%S")
+        now_str = datetime.now().strftime("%H%M%S")
         output_filename = f"{s_title}_{st_m:02d}m{st_s:02d}s-{et_m:02d}m{et_s:02d}s_{now_str}.mp4"
     elif not output_filename.endswith(".mp4"):
         output_filename = f"{output_filename}.mp4"
@@ -172,7 +174,8 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
         except Exception:
             pass
 
-    print(f"[Success] Clip generated successfully: {output_path} ({os.path.getsize(output_path)} bytes)")
+    file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+    print(f"[Success] Clip generated successfully: {output_path} ({file_size} bytes)")
     return output_path
 
 if __name__ == "__main__":
