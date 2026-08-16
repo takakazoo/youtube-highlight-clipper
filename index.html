@@ -596,8 +596,10 @@
       try {
         const res = await fetch('/api/transcripts');
         const data = await res.json();
-        if (data.segments && data.segments.length > 0) {
+        if (data.segments && Array.isArray(data.segments)) {
           videoSegments = data.segments;
+        } else {
+          videoSegments = [];
         }
       } catch (e) {
         console.error("Failed to load transcripts:", e);
@@ -613,6 +615,8 @@
       }, 5000);
     }
 
+    let LAST_LOADED_VIDEO_ID = "";
+
     async function loadInfo() {
       try {
         const res = await fetch('/api/info');
@@ -621,6 +625,7 @@
         if (data.video_id) {
           if (CURRENT_VIDEO_ID !== data.video_id) {
             CURRENT_VIDEO_ID = data.video_id;
+            videoSegments = []; // Clear previous video's transcripts
             if (isApiReady) {
               initOrUpdatePlayer(data.video_id);
             }
@@ -660,7 +665,8 @@
           badge.title = '';
         }
 
-        if (data.url && !data.is_analyzing && videoSegments.length === 0) {
+        if (data.url && !data.is_analyzing && (videoSegments.length === 0 || LAST_LOADED_VIDEO_ID !== data.video_id)) {
+          LAST_LOADED_VIDEO_ID = data.video_id;
           loadTranscripts();
         }
       } catch (e) {
@@ -680,6 +686,9 @@
       btn.disabled = true;
       btn.innerText = "開始中...";
 
+      videoSegments = []; // Immediately reset previous transcripts in memory
+      updateLiveSubtitle(0);
+
       try {
         const res = await fetch('/api/analyze_new', {
           method: 'POST',
@@ -690,6 +699,7 @@
         
         if (res.ok && data.status === 'started') {
           CURRENT_VIDEO_ID = data.video_id;
+          LAST_LOADED_VIDEO_ID = data.video_id;
           if (ytPlayer && ytPlayer.loadVideoById) {
             ytPlayer.cueVideoById(data.video_id);
           } else {

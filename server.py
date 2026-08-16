@@ -142,11 +142,19 @@ def analyze_new():
     CURRENT_DATA["progress_msg"] = "解析タスクを開始しました..."
     CURRENT_DATA["error_msg"] = None
 
-    # Clear previous highlights while analyzing
+    # Clear previous highlights and transcripts while analyzing new video
     if os.path.exists(HIGHLIGHTS_JSON):
         try:
             with open(HIGHLIGHTS_JSON, "w", encoding="utf-8") as f:
                 json.dump({"video_url": new_url, "highlights": []}, f)
+        except Exception:
+            pass
+
+    trans_file = os.path.join(BASE_DIR, "transcripts.json")
+    if os.path.exists(trans_file):
+        try:
+            with open(trans_file, "w", encoding="utf-8") as f:
+                json.dump({"video_url": new_url, "segments": []}, f)
         except Exception:
             pass
 
@@ -160,15 +168,21 @@ def analyze_new():
 
 @app.route("/api/transcripts", methods=["GET"])
 def get_transcripts_endpoint():
+    current_url = CURRENT_DATA.get("url", "").strip()
+    if not current_url or CURRENT_DATA.get("is_analyzing", False):
+        return jsonify({"video_url": current_url, "segments": []})
+
     trans_file = os.path.join(BASE_DIR, "transcripts.json")
     if os.path.exists(trans_file):
         try:
             with open(trans_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            # Only return transcripts if they match the currently active video URL
+            if data.get("video_url") == current_url:
                 return jsonify(data)
         except Exception as e:
             print("Error reading transcripts.json:", e)
-    return jsonify({"segments": []})
+    return jsonify({"video_url": current_url, "segments": []})
 
 @app.route("/api/transcript_search", methods=["GET"])
 def search_transcripts_endpoint():

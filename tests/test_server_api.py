@@ -97,20 +97,44 @@ class TestServerAPI(unittest.TestCase):
         res = self.client.delete('/api/clips/..%2F..%2Fsecret.txt')
         self.assertEqual(res.status_code, 404)
 
-    def test_transcripts_endpoint_returns_saved_segments_regardless_of_current_url(self):
-        """Tests that /api/transcripts reliably returns segments from transcripts.json even on clean startup."""
-        sample_trans = {
-            "video_url": "https://test.url",
-            "segments": [{"start": 1.0, "end": 5.0, "text": "テスト発話セグメント"}]
+    def test_transcripts_endpoint_filters_by_current_video_url(self):
+        """Tests that /api/transcripts returns segments only when matching current active video URL."""
+        import server
+        server.CURRENT_DATA["url"] = "https://www.youtube.com/watch?v=active_video"
+        server.CURRENT_DATA["is_analyzing"] = False
+
+        sample_matching = {
+            "video_url": "https://www.youtube.com/watch?v=active_video",
+            "segments": [{"start": 1.0, "end": 5.0, "text": "新しい動画の発話テキスト"}]
         }
         with patch('server.os.path.exists', return_value=True), \
-             patch('builtins.open', unittest.mock.mock_open(read_data=json.dumps(sample_trans))):
+             patch('builtins.open', unittest.mock.mock_open(read_data=json.dumps(sample_matching))):
             res = self.client.get('/api/transcripts')
             self.assertEqual(res.status_code, 200)
             data = res.get_json()
-            self.assertIn("segments", data)
             self.assertEqual(len(data["segments"]), 1)
-            self.assertEqual(data["segments"][0]["text"], "テスト発話セグメント")
+            self.assertEqual(data["segments"][0]["text"], "新しい動画の発話テキスト")
+
+        # When URL does not match (stale transcripts from previous video) -> Must return empty segments!
+        server.CURRENT_DATA["url"] = "https://www.youtube.com/watch?v=different_new_video"
+        with patch('server.os.path.exists', return_value=True), \
+             patch('builtins.open', unittest.mock.mock_open(read_data=json.dumps(sample_matching))):
+            res_diff = self.client.get('/api/transcripts')
+            self.assertEqual(res_diff.status_code, 200)
+            data_diff = res_diff.get_json()
+            self.assertEqual(len(data_diff["segments"]), 0)
+
+    @patch('threading.Thread')
+    def test_analyze_new_clears_previous_transcripts(self, mock_thread):
+        """Tests that POST /api/analyze_new immediately wipes old transcripts and highlights."""
+        res = self.client.post('/api/analyze_new', json={'url': 'https://www.youtube.com/watch?v=new_video_123'})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data["status"], "started")
+
+        import server
+        self.assertEqual(server.CURRENT_DATA["url"], "https://www.youtube.com/watch?v=new_video_123")
+        self.assertTrue(server.CURRENT_DATA["is_analyzing"])
 
     @patch('server.generate_clip_by_segments')
     def test_generate_clip_api_success_and_response(self, mock_clipper):
