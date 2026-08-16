@@ -52,11 +52,16 @@ def get_info():
 
 @app.route("/api/highlights", methods=["GET"])
 def get_highlights():
+    current_url = CURRENT_DATA.get("url", "").strip()
+    if not current_url:
+        return jsonify({"highlights": []})
+
     if os.path.exists(HIGHLIGHTS_JSON):
         try:
             with open(HIGHLIGHTS_JSON, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return jsonify(data)
+            if data.get("video_url") == current_url:
+                return jsonify(data)
         except Exception:
             pass
     return jsonify({"highlights": []})
@@ -131,6 +136,9 @@ def analyze_new():
 
 @app.route("/api/clips", methods=["GET"])
 def get_clips():
+    current_url = CURRENT_DATA.get("url", "").strip()
+    if not current_url:
+        return jsonify({"clips": []})
     clips = [f for f in os.listdir(CLIPS_DIR) if f.endswith(".mp4")]
     return jsonify({"clips": clips})
 
