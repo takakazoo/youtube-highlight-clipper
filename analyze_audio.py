@@ -37,9 +37,8 @@ def convert_to_wav(input_path, output_path):
         raise RuntimeError("FFmpeg audio conversion failed.")
     print("Converted successfully.")
 
-def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10):
+def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, video_url=VIDEO_URL):
     print("Analyzing audio volume and energy spikes...")
-    # Load audio in chunks or resampled
     y, sr = librosa.load(wav_path, sr=16000)
     total_duration = len(y) / sr
     print(f"Total audio duration: {total_duration:.1f}s ({int(total_duration//60)}m {int(total_duration%60)}s)")
@@ -112,7 +111,7 @@ def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10):
 
     with open(HIGHLIGHTS_JSON, "w", encoding="utf-8") as f:
         json.dump({
-            "video_url": VIDEO_URL,
+            "video_url": video_url,
             "total_duration": total_duration,
             "highlights": results
         }, f, ensure_ascii=False, indent=2)

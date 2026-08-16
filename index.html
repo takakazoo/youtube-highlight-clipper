@@ -52,6 +52,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
 
     .logo-area {
@@ -78,6 +80,14 @@
       letter-spacing: -0.01em;
     }
 
+    .url-input-container {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+      max-width: 620px;
+    }
+
     .video-tag {
       font-size: 0.85rem;
       color: var(--text-secondary);
@@ -85,10 +95,22 @@
       padding: 0.35rem 0.75rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border-color);
-      max-width: 480px;
+      max-width: 380px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .status-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: var(--radius-sm);
+      background-color: var(--accent-dim);
+      color: var(--accent-color);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
     }
 
     main {
@@ -201,6 +223,7 @@
       justify-content: center;
       gap: 0.5rem;
       transition: background-color 0.15s ease, transform 0.1s ease;
+      white-space: nowrap;
     }
 
     .btn:hover {
@@ -329,6 +352,7 @@
       align-items: center;
       gap: 0.5rem;
       z-index: 100;
+      max-width: 450px;
     }
   </style>
 </head>
@@ -338,12 +362,17 @@
       <div class="logo-icon">✂</div>
       <h1>YouTube 切り抜きジェネレーター</h1>
     </div>
-    <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; max-width: 650px; margin: 0 1.5rem;">
+    
+    <div class="url-input-container">
       <input type="text" id="inputVideoUrl" class="form-input" style="flex: 1;" placeholder="https://www.youtube.com/watch?v=..." value="https://www.youtube.com/watch?v=RJrGlRVA0-s">
       <button class="btn btn-secondary btn-sm" onclick="analyzeNewUrl()" id="btnAnalyzeNew">新規動画解析</button>
     </div>
-    <div id="videoTag" class="video-tag" title="YouTube Video">
-      🎬 読み込み中...
+
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span id="statusBadge" class="status-badge">準備完了</span>
+      <div id="videoTag" class="video-tag" title="YouTube Video">
+        🎬 読み込み中...
+      </div>
     </div>
   </header>
 
@@ -420,7 +449,7 @@
       toast.style.display = 'flex';
       setTimeout(() => {
         toast.style.display = 'none';
-      }, 4000);
+      }, 5000);
     }
 
     async function loadInfo() {
@@ -430,19 +459,37 @@
         CURRENT_VIDEO_ID = data.video_id;
         document.getElementById('videoTag').innerText = `🎬 ${data.title}`;
         document.getElementById('videoTag').title = data.title;
-        document.getElementById('inputVideoUrl').value = data.url;
+        
+        const badge = document.getElementById('statusBadge');
+        if (data.is_analyzing) {
+          badge.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
+          badge.style.color = '#f59e0b';
+          badge.innerText = `⏳ ${data.progress_msg}`;
+        } else if (data.error_msg) {
+          badge.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+          badge.style.color = '#ef4444';
+          badge.innerText = `⚠️ 解析失敗`;
+        } else {
+          badge.style.backgroundColor = 'rgba(56, 189, 248, 0.12)';
+          badge.style.color = '#38bdf8';
+          badge.innerText = `✅ ${data.progress_msg || '準備完了'}`;
+        }
       } catch (e) {
         console.error(e);
       }
     }
 
     async function analyzeNewUrl() {
-      const url = document.getElementById('inputVideoUrl').value.trim();
-      if (!url) return;
+      const urlInput = document.getElementById('inputVideoUrl');
+      const url = urlInput.value.trim();
+      if (!url) {
+        showToast("YouTubeのURLを入力してください");
+        return;
+      }
+
       const btn = document.getElementById('btnAnalyzeNew');
       btn.disabled = true;
-      btn.innerText = "解析準備中...";
-      showToast("新しい動画の音声ダウンロード＆盛り上がり解析を開始しました");
+      btn.innerText = "開始中...";
 
       try {
         const res = await fetch('/api/analyze_new', {
@@ -451,14 +498,18 @@
           body: JSON.stringify({ url: url })
         });
         const data = await res.json();
-        if (data.status === 'started') {
+        
+        if (res.ok && data.status === 'started') {
           CURRENT_VIDEO_ID = data.video_id;
-          document.getElementById('videoTag').innerText = `🎬 ${data.title}`;
           document.getElementById('ytPlayer').src = `https://www.youtube.com/embed/${data.video_id}?enablejsapi=1`;
-          showToast("解析がバックグラウンドで進行中です。完了するとハイライト一覧が更新されます");
+          showToast("新しい動画の音声ダウンロード＆盛り上がり解析を開始しました");
+          loadInfo();
+          loadHighlights();
+        } else {
+          showToast(`エラー: ${data.message || '解析開始に失敗しました'}`);
         }
       } catch (e) {
-        showToast("新規動画解析のリクエストに失敗しました");
+        showToast(`通信エラー: サーバーに接続できません (${e.message})`);
       } finally {
         btn.disabled = false;
         btn.innerText = "新規動画解析";
@@ -488,7 +539,7 @@
         const res = await fetch('/api/highlights');
         const data = await res.json();
         if (!data.highlights || data.highlights.length === 0) {
-          container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 2rem;">解析中のため少々お待ちください（更新ボタンを押してください）</div>`;
+          container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 2rem;">解析中のため少々お待ちください（上のステータスをご確認ください）</div>`;
           return;
         }
 
@@ -625,7 +676,10 @@
       loadInfo();
       loadHighlights();
       loadClips();
-      setInterval(loadHighlights, 5000);
+      setInterval(() => {
+        loadInfo();
+        loadHighlights();
+      }, 4000);
     };
   </script>
 </body>
