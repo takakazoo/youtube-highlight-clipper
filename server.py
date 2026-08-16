@@ -22,11 +22,11 @@ app = Flask(__name__, static_folder=BASE_DIR)
 CORS(app)
 
 CURRENT_DATA = {
-    "url": "https://www.youtube.com/watch?v=RJrGlRVA0-s",
-    "title": "【パラノマサイト FILE38 伊勢人魚物語】初代過ぎるおじさんが初見実況【switch】",
-    "video_id": "RJrGlRVA0-s",
+    "url": "",
+    "title": "URLを入力して動画を読み込んでください",
+    "video_id": "",
     "is_analyzing": False,
-    "progress_msg": "準備完了",
+    "progress_msg": "URLを入力してください",
     "error_msg": None
 }
 
