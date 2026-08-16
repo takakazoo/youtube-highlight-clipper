@@ -39,10 +39,17 @@ def sanitize_title(title, max_len=20):
     cleaned = cleaned[:max_len].rstrip('_')
     return cleaned if cleaned else "clip"
 
+def get_unique_filepath(directory, filename):
+    """Generates unique file path by adding _1, _2 suffixes if file exists."""
+    base_name, ext = os.path.splitext(filename)
+    counter = 1
+    current_name = filename
+    while os.path.exists(os.path.join(directory, current_name)):
+        current_name = f"{base_name}_{counter}{ext}"
+        counter += 1
+    return os.path.join(directory, current_name)
+
 def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=None, title=None, generate_srt=False, burn_subtitles=False):
-    import datetime
-    import re
-    
     if not url:
         hl_file = os.path.join(BASE_DIR, "highlights.json")
         if os.path.exists(hl_file):
@@ -53,26 +60,25 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
             raise ValueError("Video URL must be provided.")
     
     info = get_manifest_info(url)
-    video_title = title or info.get('title', '')
-    title_prefix = sanitize_title(video_title, max_len=20)
+    video_title = title or info.get('title', 'clip')
 
-    start_m, start_s = int(start_sec // 60), int(start_sec % 60)
-    end_m, end_s = int(end_sec // 60), int(end_sec % 60)
-    time_tag = datetime.datetime.now().strftime("%H%M%S")
-
-    if output_filename is None:
-        output_filename = f"{title_prefix}_{start_m:02d}m{start_s:02d}s-{end_m:02d}m{end_s:02d}s_{time_tag}.mp4"
+    if not output_filename:
+        # Plan A: {SanitizedTitle_Max20}_{Start}m{Starts}s-{End}m{Ends}s_{Time}.mp4
+        s_title = sanitize_title(video_title, max_len=20)
+        st_m = int(start_sec // 60)
+        st_s = int(start_sec % 60)
+        et_m = int(end_sec // 60)
+        et_s = int(end_sec % 60)
+        now_str = datetime.datetime.now().strftime("%H%M%S")
+        output_filename = f"{s_title}_{st_m:02d}m{st_s:02d}s-{et_m:02d}m{et_s:02d}s_{now_str}.mp4"
     elif not output_filename.endswith(".mp4"):
         output_filename = f"{output_filename}.mp4"
 
     # Avoid collision if file exists
+    output_path = get_unique_filepath(CLIPS_DIR, output_filename)
+    output_filename = os.path.basename(output_path)
     base_name, ext = os.path.splitext(output_filename)
-    counter = 1
-    while os.path.exists(os.path.join(CLIPS_DIR, output_filename)):
-        output_filename = f"{base_name}_{counter}{ext}"
-        counter += 1
 
-    output_path = os.path.join(CLIPS_DIR, output_filename)
     print(f"\n[Clip Generator] Extracting {start_sec}s - {end_sec}s -> {output_filename}")
     
     # 298 (720p), 299 (1080p), or 135 (480p)

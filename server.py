@@ -53,18 +53,26 @@ def get_info():
 @app.route("/api/highlights", methods=["GET"])
 def get_highlights():
     current_url = CURRENT_DATA.get("url", "").strip()
+    error_msg = CURRENT_DATA.get("error_msg")
+    is_analyzing = CURRENT_DATA.get("is_analyzing", False)
+
     if not current_url:
-        return jsonify({"highlights": []})
+        return jsonify({"highlights": [], "error_msg": None, "is_analyzing": False})
+
+    if error_msg:
+        return jsonify({"highlights": [], "error_msg": error_msg, "is_analyzing": False})
 
     if os.path.exists(HIGHLIGHTS_JSON):
         try:
             with open(HIGHLIGHTS_JSON, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if data.get("video_url") == current_url:
+                data["error_msg"] = None
+                data["is_analyzing"] = is_analyzing
                 return jsonify(data)
         except Exception:
             pass
-    return jsonify({"highlights": []})
+    return jsonify({"highlights": [], "error_msg": error_msg, "is_analyzing": is_analyzing})
 
 def process_analysis_task(url, video_id):
     CURRENT_DATA["is_analyzing"] = True

@@ -26,8 +26,12 @@ def format_timestamp(seconds):
     hrs = int(seconds // 3600)
     mins = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    millis = int((seconds - int(seconds)) * 1000)
+    millis = int(round((seconds - int(seconds)) * 1000))
+    if millis >= 1000:
+        millis = 999
     return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
+
+format_srt_time = format_timestamp
 
 def transcribe_audio_file(audio_path, language="ja"):
     """Transcribes an entire audio file or segment and returns structured segments."""

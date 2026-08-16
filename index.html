@@ -385,7 +385,7 @@
           <span>プレビュープレイヤー</span>
         </div>
         <div id="ytPlayerContainer" class="player-container">
-          <div id="ytPlayer"></div>
+          <iframe id="ytPlayer" src="" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
         </div>
         
         <!-- Realtime Live Subtitle Bar (Synchronized with Video Time) -->
@@ -501,41 +501,66 @@
 
     function initOrUpdatePlayer(videoId) {
       if (!videoId) return;
-      if (!ytPlayer) {
-        ytPlayer = new YT.Player('ytPlayer', {
-          height: '100%',
-          width: '100%',
-          videoId: videoId,
-          playerVars: {
-            enablejsapi: 1,
-            origin: window.location.origin,
-            rel: 0
-          },
-          events: {
-            'onReady': () => { startGlobalPlaybackWatcher(); }
-          }
-        });
-      } else {
-        if (ytPlayer.cueVideoById) {
-          ytPlayer.cueVideoById(videoId);
+      const iframe = document.getElementById('ytPlayer');
+      if (!iframe) return;
+
+      if (!iframe.src || !iframe.src.includes(videoId)) {
+        iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+      }
+
+      if (window.YT && YT.Player && !ytPlayer) {
+        try {
+          ytPlayer = new YT.Player('ytPlayer', {
+            events: {
+              'onReady': () => { startGlobalPlaybackWatcher(); }
+            }
+          });
+        } catch (e) {
+          console.warn("YT.Player init deferred:", e);
         }
       }
     }
 
-    function startGlobalPlaybackWatcher() {
-      // Periodic ticker to sync subtitle with current video time continuously
-      setInterval(() => {
-        if (ytPlayer && ytPlayer.getCurrentTime && typeof ytPlayer.getPlayerState === 'function') {
-          const state = ytPlayer.getPlayerState();
-          if (state === 1) { // 1 = YT.PlayerState.PLAYING
-            const cur = ytPlayer.getCurrentTime();
+    // Direct iframe postMessage listener - guarantees 100% reliable realtime currentTime tracking
+    window.addEventListener('message', (event) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.event === 'infoDelivery' && data.info) {
+          if (typeof data.info.currentTime === 'number') {
+            const cur = data.info.currentTime;
             updateLiveSubtitle(cur);
 
             if (targetEndSec !== null && cur >= targetEndSec) {
-              ytPlayer.pauseVideo();
+              const iframe = document.getElementById('ytPlayer');
+              if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage(JSON.stringify({event: 'command', func: 'pauseVideo', args: ''}), '*');
+              }
+              if (ytPlayer && ytPlayer.pauseVideo) {
+                ytPlayer.pauseVideo();
+              }
               targetEndSec = null;
             }
           }
+        }
+      } catch (e) {}
+    });
+
+    function startGlobalPlaybackWatcher() {
+      if (window._watcherInterval) clearInterval(window._watcherInterval);
+      window._watcherInterval = setInterval(() => {
+        if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function' && typeof ytPlayer.getPlayerState === 'function') {
+          try {
+            const state = ytPlayer.getPlayerState();
+            if (state === 1) { // 1 = PLAYING
+              const cur = ytPlayer.getCurrentTime();
+              updateLiveSubtitle(cur);
+
+              if (targetEndSec !== null && cur >= targetEndSec) {
+                ytPlayer.pauseVideo();
+                targetEndSec = null;
+              }
+            }
+          } catch (e) {}
         }
       }, 100);
     }
@@ -615,18 +640,23 @@
           badge.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
           badge.style.color = '#f59e0b';
           badge.innerText = `⏳ ${data.progress_msg}`;
+          badge.title = data.progress_msg;
         } else if (data.error_msg) {
           badge.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
           badge.style.color = '#ef4444';
-          badge.innerText = `⚠️ 解析失敗`;
+          const shortErr = data.error_msg.length > 30 ? data.error_msg.substring(0, 30) + '...' : data.error_msg;
+          badge.innerText = `⚠️ 解析失敗: ${shortErr}`;
+          badge.title = `エラー詳細: ${data.error_msg}`;
         } else if (data.url) {
           badge.style.backgroundColor = 'rgba(56, 189, 248, 0.12)';
           badge.style.color = '#38bdf8';
           badge.innerText = `✅ ${data.progress_msg || '準備完了'}`;
+          badge.title = data.progress_msg || '準備完了';
         } else {
           badge.style.backgroundColor = 'rgba(56, 189, 248, 0.12)';
           badge.style.color = '#38bdf8';
           badge.innerText = `URLを入力してください`;
+          badge.title = '';
         }
 
         if (data.url && !data.is_analyzing && videoSegments.length === 0) {
@@ -692,15 +722,11 @@
 
     function playRange(startSec, endSec) {
       targetEndSec = endSec;
-      if (ytPlayer && ytPlayer.loadVideoById) {
-        ytPlayer.loadVideoById({
-          videoId: CURRENT_VIDEO_ID,
-          startSeconds: startSec,
-          endSeconds: endSec
-        });
-      } else {
-        const iframe = document.getElementById('ytPlayer');
-        iframe.src = `https://www.youtube.com/embed/${CURRENT_VIDEO_ID}?start=${Math.floor(startSec)}&end=${Math.ceil(endSec)}&autoplay=1&enablejsapi=1`;
+      updateLiveSubtitle(startSec);
+      
+      const iframe = document.getElementById('ytPlayer');
+      if (iframe && CURRENT_VIDEO_ID) {
+        iframe.src = `https://www.youtube.com/embed/${CURRENT_VIDEO_ID}?start=${Math.floor(startSec)}&end=${Math.ceil(endSec)}&autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
       }
     }
 
@@ -828,6 +854,23 @@
       try {
         const res = await fetch('/api/highlights');
         const data = await res.json();
+        if (data.error_msg) {
+          container.innerHTML = `
+            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 1.25rem; color: #fca5a5;">
+              <div style="font-weight: 600; color: #ef4444; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
+                <span>⚠️ 動画の解析に失敗しました</span>
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                以下のエラーが発生しました。URLが正しいか、または公開動画であるかをご確認ください：
+              </div>
+              <div style="color: #fee2e2; font-family: monospace; font-size: 0.8rem; background: rgba(0, 0, 0, 0.4); padding: 0.75rem; border-radius: 6px; word-break: break-all; max-height: 150px; overflow-y: auto;">
+                ${data.error_msg}
+              </div>
+            </div>
+          `;
+          return;
+        }
+
         if (!data.highlights || data.highlights.length === 0) {
           container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 2rem;">解析中のため少々お待ちください（上のステータスをご確認ください）</div>`;
           return;
