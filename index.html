@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube 切り抜き動画ジェネレーター</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #182234;
+      --bg-card-hover: #222f46;
+      --border-color: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-color: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --accent-dim: rgba(56, 189, 248, 0.12);
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', 'Noto Sans JP', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--accent-dim);
+      color: var(--accent-color);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    h1 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .video-tag {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      background-color: var(--bg-card);
+      padding: 0.35rem 0.75rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      max-width: 480px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    main {
+      flex: 1;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .section-card {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .player-container {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: var(--radius-md);
+      background-color: #000;
+    }
+
+    .player-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .manual-controls {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 1rem;
+      align-items: end;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .form-group label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .form-input {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.6rem 0.85rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    .btn {
+      background-color: var(--accent-color);
+      color: #0f172a;
+      border: none;
+      padding: 0.65rem 1.25rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: background-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-secondary {
+      background-color: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--bg-card-hover);
+    }
+
+    .btn-sm {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .highlights-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+
+    .highlight-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .highlight-card:hover {
+      background-color: var(--bg-card-hover);
+      border-color: #475569;
+    }
+
+    .highlight-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .highlight-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .highlight-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      background-color: var(--accent-dim);
+      color: var(--accent-color);
+      padding: 0.2rem 0.5rem;
+      border-radius: var(--radius-sm);
+    }
+
+    .highlight-score {
+      font-size: 0.75rem;
+      color: var(--warning-color);
+      font-weight: 600;
+    }
+
+    .highlight-time {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-feature-settings: "tnum";
+    }
+
+    .highlight-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .clips-history {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .clip-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+    }
+
+    .clip-item-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .status-toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background-color: var(--bg-card);
+      border: 1px solid var(--accent-color);
+      color: var(--text-primary);
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">✂</div>
+      <h1>YouTube 切り抜きジェネレーター</h1>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; max-width: 650px; margin: 0 1.5rem;">
+      <input type="text" id="inputVideoUrl" class="form-input" style="flex: 1;" placeholder="https://www.youtube.com/watch?v=..." value="https://www.youtube.com/watch?v=RJrGlRVA0-s">
+      <button class="btn btn-secondary btn-sm" onclick="analyzeNewUrl()" id="btnAnalyzeNew">新規動画解析</button>
+    </div>
+    <div id="videoTag" class="video-tag" title="YouTube Video">
+      🎬 読み込み中...
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Column: Video Preview & Manual Generation -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <div class="section-card">
+        <div class="section-title">
+          <span>📺</span>
+          <span>プレビュープレイヤー</span>
+        </div>
+        <div class="player-container">
+          <iframe id="ytPlayer" src="https://www.youtube.com/embed/RJrGlRVA0-s?enablejsapi=1" allowfullscreen></iframe>
+        </div>
+        
+        <!-- Manual Range Section -->
+        <div class="manual-controls">
+          <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;">⏱ 自由な時間指定で切り抜き</div>
+          <div class="controls-grid">
+            <div class="form-group">
+              <label for="inputStart">開始時間 (秒 or mm:ss)</label>
+              <input type="text" id="inputStart" class="form-input" placeholder="00:00" value="00:00">
+            </div>
+            <div class="form-group">
+              <label for="inputEnd">終了時間 (秒 or mm:ss)</label>
+              <input type="text" id="inputEnd" class="form-input" placeholder="00:45" value="00:45">
+            </div>
+            <button id="btnManualGenerate" class="btn" onclick="generateManualClip()">
+              <span>切り抜き生成</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generated Clips Section -->
+      <div class="section-card">
+        <div class="section-title">
+          <span>💾</span>
+          <span>生成済み切り抜き動画</span>
+        </div>
+        <div id="clipsList" class="clips-history">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">生成された動画はここに表示されます</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Auto-Detected Highlights -->
+    <div class="section-card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="section-title">
+          <span>🔥</span>
+          <span>盛り上がり自動検出シーン（おすすめ候補）</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadHighlights()">更新</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-secondary);">
+        動画全体の音量スパイク・リアクションエネルギーを解析して検出された上位ハイライト区間です。
+      </p>
+
+      <div id="highlightsContainer" class="highlights-list">
+        <div style="color: var(--text-muted); text-align: center; padding: 2rem;">解析データを読み込み中...</div>
+      </div>
+    </div>
+  </main>
+
+  <div id="statusToast" class="status-toast"></div>
+
+  <script>
+    let CURRENT_VIDEO_ID = "RJrGlRVA0-s";
+
+    function showToast(msg) {
+      const toast = document.getElementById('statusToast');
+      toast.innerText = msg;
+      toast.style.display = 'flex';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, 4000);
+    }
+
+    async function loadInfo() {
+      try {
+        const res = await fetch('/api/info');
+        const data = await res.json();
+        CURRENT_VIDEO_ID = data.video_id;
+        document.getElementById('videoTag').innerText = `🎬 ${data.title}`;
+        document.getElementById('videoTag').title = data.title;
+        document.getElementById('inputVideoUrl').value = data.url;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function analyzeNewUrl() {
+      const url = document.getElementById('inputVideoUrl').value.trim();
+      if (!url) return;
+      const btn = document.getElementById('btnAnalyzeNew');
+      btn.disabled = true;
+      btn.innerText = "解析準備中...";
+      showToast("新しい動画の音声ダウンロード＆盛り上がり解析を開始しました");
+
+      try {
+        const res = await fetch('/api/analyze_new', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ url: url })
+        });
+        const data = await res.json();
+        if (data.status === 'started') {
+          CURRENT_VIDEO_ID = data.video_id;
+          document.getElementById('videoTag').innerText = `🎬 ${data.title}`;
+          document.getElementById('ytPlayer').src = `https://www.youtube.com/embed/${data.video_id}?enablejsapi=1`;
+          showToast("解析がバックグラウンドで進行中です。完了するとハイライト一覧が更新されます");
+        }
+      } catch (e) {
+        showToast("新規動画解析のリクエストに失敗しました");
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "新規動画解析";
+      }
+    }
+
+    function parseTimeToSeconds(timeStr) {
+      if (typeof timeStr === 'number') return timeStr;
+      if (!isNaN(timeStr)) return parseFloat(timeStr);
+      const parts = timeStr.trim().split(':').map(Number);
+      if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+      } else if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+      return 0;
+    }
+
+    function seekTo(seconds) {
+      const iframe = document.getElementById('ytPlayer');
+      iframe.src = `https://www.youtube.com/embed/${CURRENT_VIDEO_ID}?start=${Math.floor(seconds)}&autoplay=1`;
+    }
+
+    async function loadHighlights() {
+      const container = document.getElementById('highlightsContainer');
+      try {
+        const res = await fetch('/api/highlights');
+        const data = await res.json();
+        if (!data.highlights || data.highlights.length === 0) {
+          container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 2rem;">解析中のため少々お待ちください（更新ボタンを押してください）</div>`;
+          return;
+        }
+
+        container.innerHTML = '';
+        data.highlights.forEach(hl => {
+          const card = document.createElement('div');
+          card.className = 'highlight-card';
+          card.innerHTML = `
+            <div class="highlight-info">
+              <div class="highlight-header">
+                <span class="highlight-badge">#${hl.id}</span>
+                <span class="highlight-score">★ 盛り上がりスコア: ${hl.score}</span>
+              </div>
+              <div class="highlight-time">${hl.start_time_str} - ${hl.end_time_str} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">(${hl.duration}秒)</span></div>
+            </div>
+            <div class="highlight-actions">
+              <button class="btn btn-secondary btn-sm" onclick="previewHighlight(${hl.start_seconds}, '${hl.start_time_str}', '${hl.end_time_str}')">再生</button>
+              <button class="btn btn-sm" id="btn-clip-${hl.id}" onclick="generateClipFromHighlight(${hl.id}, ${hl.start_seconds}, ${hl.end_seconds})">切り抜く</button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      } catch (e) {
+        container.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 2rem;">データ取得エラー</div>`;
+      }
+    }
+
+    function previewHighlight(startSec, startStr, endStr) {
+      seekTo(startSec);
+      document.getElementById('inputStart').value = startStr;
+      document.getElementById('inputEnd').value = endStr;
+    }
+
+    async function generateClipFromHighlight(id, startSec, endSec) {
+      const btn = document.getElementById(`btn-clip-${id}`);
+      const oldText = btn.innerText;
+      btn.innerText = "生成中...";
+      btn.disabled = true;
+      showToast(`ハイライト #${id} の切り抜き動画を生成しています...`);
+
+      try {
+        const res = await fetch('/api/generate_clip', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            start_sec: startSec,
+            end_sec: endSec
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          showToast(`切り抜きが完了しました: ${data.filename}`);
+          loadClips();
+        } else {
+          showToast(`エラー: ${data.message}`);
+        }
+      } catch (err) {
+        showToast("生成リクエストに失敗しました");
+      } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+      }
+    }
+
+    async function generateManualClip() {
+      const startStr = document.getElementById('inputStart').value;
+      const endStr = document.getElementById('inputEnd').value;
+      const startSec = parseTimeToSeconds(startStr);
+      const endSec = parseTimeToSeconds(endStr);
+
+      if (endSec <= startSec) {
+        alert("終了時間は開始時間より後に設定してください");
+        return;
+      }
+
+      const btn = document.getElementById('btnManualGenerate');
+      btn.innerText = "生成中...";
+      btn.disabled = true;
+      showToast(`切り抜き動画（${startStr} - ${endStr}）を生成中...`);
+
+      try {
+        const res = await fetch('/api/generate_clip', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            start_sec: startSec,
+            end_sec: endSec
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          showToast(`切り抜きが完了しました: ${data.filename}`);
+          loadClips();
+        } else {
+          showToast(`エラー: ${data.message}`);
+        }
+      } catch (err) {
+        showToast("生成リクエストに失敗しました");
+      } finally {
+        btn.innerText = "切り抜き生成";
+        btn.disabled = false;
+      }
+    }
+
+    async function loadClips() {
+      const list = document.getElementById('clipsList');
+      try {
+        const res = await fetch('/api/clips');
+        const data = await res.json();
+        if (!data.clips || data.clips.length === 0) {
+          list.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem;">生成された動画はここに表示されます</div>`;
+          return;
+        }
+
+        list.innerHTML = '';
+        data.clips.forEach(clip => {
+          const item = document.createElement('div');
+          item.className = 'clip-item';
+          item.innerHTML = `
+            <span class="clip-item-name">📹 ${clip}</span>
+            <div style="display: flex; gap: 0.5rem;">
+              <a href="/clips/${clip}" target="_blank" class="btn btn-secondary btn-sm">再生・確認</a>
+              <a href="/clips/${clip}" download class="btn btn-sm">ダウンロード</a>
+            </div>
+          `;
+          list.appendChild(item);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    window.onload = () => {
+      loadInfo();
+      loadHighlights();
+      loadClips();
+      setInterval(loadHighlights, 5000);
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Temporary audio and video assets
+*.m4a
+*.wav
+*.m4v
+temp_segments/
+clips/*.mp4
+!clips/.gitkeep
+
+# Output JSON data
+highlights.json
+
+# OS specific files
+.DS_Store
+Thumbs.db
