@@ -12,10 +12,13 @@ ENV/
 *.m4v
 temp_segments/
 clips/*.mp4
+clips/*.srt
 !clips/.gitkeep
 
 # Output JSON data
 highlights.json
+transcripts.json
+
 
 # OS specific files
 .DS_Store
