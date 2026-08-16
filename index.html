@@ -992,12 +992,38 @@
                 ${srtLink}
               </div>
             </div>
-            <a href="/clips/${encFile}" download="${item.filename}" class="btn btn-secondary btn-sm" style="flex-shrink: 0;">保存</a>
+            <div style="display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0;">
+              <a href="/clips/${encFile}" download="${item.filename}" class="btn btn-secondary btn-sm">保存</a>
+              <button class="btn btn-secondary btn-sm" onclick="deleteClip('${item.filename.replace(/'/g, "\\'")}')" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" title="動画と字幕を削除">
+                🗑️ 削除
+              </button>
+            </div>
           `;
           list.appendChild(row);
         });
       } catch (e) {
         console.error("loadClips error:", e);
+      }
+    }
+
+    async function deleteClip(filename) {
+      if (!confirm(`「${filename}」を削除しますか？\n（関連する字幕ファイルも削除されます）`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/clips/${encodeURIComponent(filename)}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'success') {
+          showToast(`削除しました: ${filename}`);
+          loadClips();
+        } else {
+          showToast(`削除エラー: ${data.message || '削除に失敗しました'}`);
+        }
+      } catch (e) {
+        showToast(`通信エラー: ${e.message}`);
       }
     }
 

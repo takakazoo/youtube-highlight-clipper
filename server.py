@@ -182,6 +182,35 @@ def get_clips():
 def download_clip(filename):
     return send_from_directory(CLIPS_DIR, filename)
 
+@app.route("/api/clips/<path:filename>", methods=["DELETE", "POST"])
+def delete_clip(filename):
+    import urllib.parse
+    decoded_filename = urllib.parse.unquote(filename)
+    safe_filename = os.path.basename(decoded_filename)
+    target_path = os.path.join(CLIPS_DIR, safe_filename)
+    base_name, _ = os.path.splitext(safe_filename)
+    srt_path = os.path.join(CLIPS_DIR, f"{base_name}.srt")
+
+    deleted = []
+    if os.path.exists(target_path):
+        try:
+            os.remove(target_path)
+            deleted.append(safe_filename)
+        except Exception as e:
+            print("Error deleting video:", e)
+
+    if os.path.exists(srt_path):
+        try:
+            os.remove(srt_path)
+            deleted.append(f"{base_name}.srt")
+        except Exception as e:
+            print("Error deleting srt:", e)
+
+    if deleted:
+        return jsonify({"status": "success", "message": f"{', '.join(deleted)} を削除しました", "deleted": deleted})
+    else:
+        return jsonify({"status": "error", "message": f"ファイルが見つかりません: {safe_filename}"}), 404
+
 @app.route("/api/generate_clip", methods=["POST"])
 def generate_clip():
     data = request.get_json(force=True) if request.is_json else request.form
