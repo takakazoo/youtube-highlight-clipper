@@ -25,16 +25,46 @@ def get_manifest_info(url=VIDEO_URL):
         info = ydl.extract_info(url, download=False)
     return info
 
-def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=VIDEO_URL):
+def sanitize_title(title, max_len=20):
+    import re
+    if not title:
+        return "clip"
+    # Remove brackets like 【】, [], （）, (), etc.
+    cleaned = re.sub(r'[【】\[\]\(\)（）「」『』〈〉《》]', ' ', title)
+    # Remove prohibited filename characters: \ / : * ? " < > |
+    cleaned = re.sub(r'[\\/*?:"<>|]', '', cleaned)
+    # Remove multiple spaces/underscores
+    cleaned = re.sub(r'\s+', '_', cleaned.strip())
+    # Trim to max length without trailing underscore
+    cleaned = cleaned[:max_len].rstrip('_')
+    return cleaned if cleaned else "clip"
+
+def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=VIDEO_URL, title=None):
+    import datetime
+    import re
+    
+    info = get_manifest_info(url)
+    video_title = title or info.get('title', '')
+    title_prefix = sanitize_title(video_title, max_len=20)
+
+    start_m, start_s = int(start_sec // 60), int(start_sec % 60)
+    end_m, end_s = int(end_sec // 60), int(end_sec % 60)
+    time_tag = datetime.datetime.now().strftime("%H%M%S")
+
     if output_filename is None:
-        start_m, start_s = int(start_sec // 60), int(start_sec % 60)
-        end_m, end_s = int(end_sec // 60), int(end_sec % 60)
-        output_filename = f"clip_{start_m:02d}m{start_s:02d}s_to_{end_m:02d}m{end_s:02d}s.mp4"
+        output_filename = f"{title_prefix}_{start_m:02d}m{start_s:02d}s-{end_m:02d}m{end_s:02d}s_{time_tag}.mp4"
+    elif not output_filename.endswith(".mp4"):
+        output_filename = f"{output_filename}.mp4"
+
+    # Avoid collision if file exists
+    base_name, ext = os.path.splitext(output_filename)
+    counter = 1
+    while os.path.exists(os.path.join(CLIPS_DIR, output_filename)):
+        output_filename = f"{base_name}_{counter}{ext}"
+        counter += 1
 
     output_path = os.path.join(CLIPS_DIR, output_filename)
     print(f"\n[Clip Generator] Extracting {start_sec}s - {end_sec}s -> {output_filename}")
-
-    info = get_manifest_info(url)
     
     # 298 (720p), 299 (1080p), or 135 (480p)
     target_itag = '298' if quality == '720p' else '299'

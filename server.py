@@ -156,12 +156,9 @@ def generate_clip():
     if not url:
         return jsonify({"status": "error", "message": "動画URLが指定されていません。先に動画を解析してください。"}), 400
 
-    start_m, start_s = int(start_sec // 60), int(start_sec % 60)
-    end_m, end_s = int(end_sec // 60), int(end_sec % 60)
-    filename = f"clip_{start_m:02d}m{start_s:02d}s_to_{end_m:02d}m{end_s:02d}s.mp4"
-
     try:
-        generate_clip_by_segments(start_sec, end_sec, filename, quality="720p", url=url)
+        output_path = generate_clip_by_segments(start_sec, end_sec, quality="720p", url=url, title=CURRENT_DATA.get("title"))
+        filename = os.path.basename(output_path)
         return jsonify({
             "status": "success",
             "filename": filename,
