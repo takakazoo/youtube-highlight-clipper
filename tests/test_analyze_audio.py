@@ -61,5 +61,29 @@ class TestAnalyzeAudio(unittest.TestCase):
             self.assertIn("transcript", top_highlight)
             self.assertGreater(top_highlight["score"], 0)
 
+    @patch('yt_dlp.YoutubeDL')
+    def test_download_audio_ydl_opts_anti_403(self, mock_ydl_cls):
+        """Tests download_audio configures anti-403 headers and android/web player_client."""
+        from analyze_audio import download_audio
+        captured_opts = {}
+        def fake_ydl_init(opts):
+            nonlocal captured_opts
+            captured_opts = opts
+            mock_inst = MagicMock()
+            mock_inst.__enter__.return_value = mock_inst
+            return mock_inst
+
+        mock_ydl_cls.side_effect = fake_ydl_init
+
+        output_file = os.path.join(self.test_dir, "test.m4a")
+        download_audio("https://www.youtube.com/watch?v=sample", output_file)
+
+        self.assertIn("http_headers", captured_opts)
+        self.assertIn("User-Agent", captured_opts["http_headers"])
+        self.assertIn("extractor_args", captured_opts)
+        self.assertIn("youtube", captured_opts["extractor_args"])
+        self.assertIn("player_client", captured_opts["extractor_args"]["youtube"])
+        self.assertEqual(captured_opts.get("legacy_server_connect"), True)
+
 if __name__ == '__main__':
     unittest.main()

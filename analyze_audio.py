@@ -26,6 +26,9 @@ def download_audio(url, output_path):
         'quiet': False,
         'no_warnings': True,
         'ffmpeg_location': ffmpeg_dir,
+        'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'legacy_server_connect': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])

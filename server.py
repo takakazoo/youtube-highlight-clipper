@@ -99,7 +99,13 @@ def process_analysis_task(url, video_id):
     wav_path = os.path.join(BASE_DIR, "audio_16k.wav")
 
     try:
-        ydl_opts = {'quiet': True, 'no_warnings': True}
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'legacy_server_connect': True
+        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             CURRENT_DATA["title"] = info.get('title', 'YouTube Video')
