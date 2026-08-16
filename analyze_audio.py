@@ -107,17 +107,45 @@ def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, vi
             "start_time_str": format_time(st),
             "end_time_str": format_time(et),
             "score": round(sc * 100, 1),
-            "description": f"ハイライト候補 #{idx} (盛り上がり度: {round(sc * 100, 1)}点)"
+            "description": f"ハイライト候補 #{idx} (盛り上がり度: {round(sc * 100, 1)}点)",
+            "transcript": ""
         }
         results.append(item)
         print(f"[{idx}] {item['start_time_str']} - {item['end_time_str']} (スコア: {item['score']}点)")
 
+    # Save initial highlights immediately so UI updates fast
     with open(HIGHLIGHTS_JSON, "w", encoding="utf-8") as f:
         json.dump({
             "video_url": video_url,
             "total_duration": total_duration,
             "highlights": results
         }, f, ensure_ascii=False, indent=2)
+
+    # Now transcribe the audio for keyword search and highlight previews
+    try:
+        print("\nTranscribing full audio for search index & highlight previews...")
+        from transcriber import transcribe_audio_file, save_video_transcripts
+        trans_res = transcribe_audio_file(wav_path)
+        all_segments = trans_res.get("segments", [])
+        save_video_transcripts(video_url, all_segments)
+
+        # Match transcripts to highlights
+        for item in results:
+            st = item["start_seconds"]
+            et = item["end_seconds"]
+            matched_texts = [s["text"] for s in all_segments if not (s["end"] < st or s["start"] > et)]
+            item["transcript"] = " ".join(matched_texts)
+
+        # Re-save with transcript field populated
+        with open(HIGHLIGHTS_JSON, "w", encoding="utf-8") as f:
+            json.dump({
+                "video_url": video_url,
+                "total_duration": total_duration,
+                "highlights": results
+            }, f, ensure_ascii=False, indent=2)
+        print("Transcript index and highlight previews saved successfully!")
+    except Exception as e:
+        print("[Warning] Full audio transcription skipped or failed:", e)
 
     print(f"\nAnalysis complete! Saved highlights to {HIGHLIGHTS_JSON}")
     return results

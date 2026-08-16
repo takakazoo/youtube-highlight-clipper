@@ -388,6 +388,23 @@
           <iframe id="ytPlayer" src="" allowfullscreen></iframe>
         </div>
         
+        <!-- Options Toolbar (Toggles 1, 2, 3) -->
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: center; font-size: 0.85rem;">
+          <span style="font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem;">⚙️ オプション:</span>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="checkbox" id="toggleShowTranscript" checked onchange="toggleTranscriptDisplay()">
+            <span>① 発話テキストを表示</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="checkbox" id="toggleGenerateSrt" checked>
+            <span>② 字幕ファイル (.srt) を生成</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="checkbox" id="toggleBurnSubtitles">
+            <span>③ 動画にテロップを焼き込む</span>
+          </label>
+        </div>
+
         <!-- Manual Range Section -->
         <div class="manual-controls">
           <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem;">⏱ 自由な時間指定で切り抜き</div>
@@ -407,6 +424,24 @@
               <span>切り抜き生成</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Keyword Transcript Search Section (Feature 4) -->
+      <div class="section-card">
+        <div class="section-title">
+          <span>🔍</span>
+          <span>④ 動画内セリフ・キーワード検索</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+          動画内の音声テキストから特定の単語を検索し、該当シーンをピンポイントで切り抜けます。
+        </p>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+          <input type="text" id="inputSearchQuery" class="form-input" placeholder="検索したい単語・セリフを入力 (例: パラノマサイト, びっくり, クリア)" onkeydown="if(event.key==='Enter') searchKeyword()">
+          <button class="btn" onclick="searchKeyword()" style="white-space: nowrap;">検索</button>
+        </div>
+        <div id="searchResultsContainer" style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+          <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem;">キーワードを入力して検索してください</div>
         </div>
       </div>
 
@@ -608,6 +643,98 @@
       }
     }
 
+    function toggleTranscriptDisplay() {
+      const show = document.getElementById('toggleShowTranscript').checked;
+      document.querySelectorAll('.highlight-transcript').forEach(el => {
+        el.style.display = show ? 'block' : 'none';
+      });
+    }
+
+    async function searchKeyword() {
+      const q = document.getElementById('inputSearchQuery').value.trim();
+      const container = document.getElementById('searchResultsContainer');
+      if (!q) {
+        container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem;">キーワードを入力してください</div>`;
+        return;
+      }
+
+      container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem;">検索中...</div>`;
+
+      try {
+        const res = await fetch(`/api/transcript_search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (!data.results || data.results.length === 0) {
+          container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem;">「${q}」に一致する発話は見つかりませんでした</div>`;
+          return;
+        }
+
+        container.innerHTML = '';
+        data.results.forEach((item, idx) => {
+          const row = document.createElement('div');
+          row.style.background = 'rgba(255, 255, 255, 0.04)';
+          row.style.border = '1px solid var(--border-color)';
+          row.style.borderRadius = '6px';
+          row.style.padding = '0.6rem 0.75rem';
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.justifyContent = 'space-between';
+          row.style.gap = '0.5rem';
+
+          const highlightedText = item.text.replace(new RegExp(`(${q})`, 'gi'), '<mark style="background: #f59e0b; color: #000; border-radius: 2px; padding: 0 2px;">$1</mark>');
+
+          row.innerHTML = `
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 0.75rem; color: var(--accent-primary); font-weight: 600;">⏱ ${item.start_time_str} - ${item.end_time_str}</div>
+              <div style="font-size: 0.85rem; color: var(--text-primary); margin-top: 0.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${highlightedText}</div>
+            </div>
+            <div style="display: flex; gap: 0.4rem; flex-shrink: 0;">
+              <button class="btn btn-secondary btn-sm" onclick="previewHighlight(${item.start}, ${item.end}, '${item.start_time_str}', '${item.end_time_str}')">再生</button>
+              <button class="btn btn-sm" id="btn-search-clip-${idx}" onclick="generateClipFromSearch(${idx}, ${item.start}, ${item.end})">切り抜く</button>
+            </div>
+          `;
+          container.appendChild(row);
+        });
+      } catch (e) {
+        container.innerHTML = `<div style="color: #ef4444; font-size: 0.85rem; text-align: center; padding: 1rem;">検索エラーが発生しました</div>`;
+      }
+    }
+
+    async function generateClipFromSearch(idx, startSec, endSec) {
+      const btn = document.getElementById(`btn-search-clip-${idx}`);
+      const oldText = btn.innerText;
+      btn.innerText = "生成中...";
+      btn.disabled = true;
+      const genSrt = document.getElementById('toggleGenerateSrt').checked;
+      const burnSub = document.getElementById('toggleBurnSubtitles').checked;
+
+      showToast(`指定シーンの切り抜き動画を生成しています...`);
+
+      try {
+        const res = await fetch('/api/generate_clip', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            start_sec: startSec,
+            end_sec: endSec,
+            generate_srt: genSrt,
+            burn_subtitles: burnSub
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          showToast(`切り抜きが完了しました: ${data.filename}`);
+          loadClips();
+        } else {
+          showToast(`エラー: ${data.message}`);
+        }
+      } catch (err) {
+        showToast("生成リクエストに失敗しました");
+      } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+      }
+    }
+
     function previewHighlight(startSec, endSec, startStr, endStr) {
       document.getElementById('inputStart').value = startStr;
       document.getElementById('inputEnd').value = endStr;
@@ -645,10 +772,17 @@
           return;
         }
 
+        const showTranscript = document.getElementById('toggleShowTranscript').checked;
         container.innerHTML = '';
         data.highlights.forEach(hl => {
           const card = document.createElement('div');
           card.className = 'highlight-card';
+          const transcriptHtml = hl.transcript ? `
+            <div class="highlight-transcript" style="display: ${showTranscript ? 'block' : 'none'}; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); background: rgba(255,255,255,0.03); border-left: 2px solid var(--accent-primary); padding: 0.3rem 0.6rem; border-radius: 0 4px 4px 0;">
+              💬 <em>"${hl.transcript}"</em>
+            </div>
+          ` : '';
+
           card.innerHTML = `
             <div class="highlight-info">
               <div class="highlight-header">
@@ -656,6 +790,7 @@
                 <span class="highlight-score">★ 盛り上がりスコア: ${hl.score}</span>
               </div>
               <div class="highlight-time">${hl.start_time_str} - ${hl.end_time_str} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">(${hl.duration}秒)</span></div>
+              ${transcriptHtml}
             </div>
             <div class="highlight-actions">
               <button class="btn btn-secondary btn-sm" onclick="previewHighlight(${hl.start_seconds}, ${hl.end_seconds}, '${hl.start_time_str}', '${hl.end_time_str}')">再生</button>
@@ -674,6 +809,9 @@
       const oldText = btn.innerText;
       btn.innerText = "生成中...";
       btn.disabled = true;
+      const genSrt = document.getElementById('toggleGenerateSrt').checked;
+      const burnSub = document.getElementById('toggleBurnSubtitles').checked;
+
       showToast(`ハイライト #${id} の切り抜き動画を生成しています...`);
 
       try {
@@ -682,7 +820,9 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             start_sec: startSec,
-            end_sec: endSec
+            end_sec: endSec,
+            generate_srt: genSrt,
+            burn_subtitles: burnSub
           })
         });
         const data = await res.json();
@@ -714,6 +854,9 @@
       const btn = document.getElementById('btnManualGenerate');
       btn.innerText = "生成中...";
       btn.disabled = true;
+      const genSrt = document.getElementById('toggleGenerateSrt').checked;
+      const burnSub = document.getElementById('toggleBurnSubtitles').checked;
+
       showToast(`切り抜き動画（${startStr} - ${endStr}）を生成中...`);
 
       try {
@@ -722,7 +865,9 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             start_sec: startSec,
-            end_sec: endSec
+            end_sec: endSec,
+            generate_srt: genSrt,
+            burn_subtitles: burnSub
           })
         });
         const data = await res.json();

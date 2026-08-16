@@ -134,6 +134,15 @@ def analyze_new():
         "message": "解析タスクを開始しました"
     })
 
+@app.route("/api/transcript_search", methods=["GET"])
+def search_transcripts_endpoint():
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"results": []})
+    from transcriber import search_transcripts
+    results = search_transcripts(query)
+    return jsonify({"query": query, "results": results})
+
 @app.route("/api/clips", methods=["GET"])
 def get_clips():
     current_url = CURRENT_DATA.get("url", "").strip()
@@ -152,17 +161,31 @@ def generate_clip():
     start_sec = float(data.get("start_sec", 0))
     end_sec = float(data.get("end_sec", 30))
     url = data.get("url") or CURRENT_DATA.get("url", "").strip()
+    generate_srt = bool(data.get("generate_srt", False))
+    burn_subtitles = bool(data.get("burn_subtitles", False))
 
     if not url:
         return jsonify({"status": "error", "message": "動画URLが指定されていません。先に動画を解析してください。"}), 400
 
     try:
-        output_path = generate_clip_by_segments(start_sec, end_sec, quality="720p", url=url, title=CURRENT_DATA.get("title"))
+        output_path = generate_clip_by_segments(
+            start_sec, end_sec,
+            quality="720p",
+            url=url,
+            title=CURRENT_DATA.get("title"),
+            generate_srt=generate_srt,
+            burn_subtitles=burn_subtitles
+        )
         filename = os.path.basename(output_path)
+        base_name, _ = os.path.splitext(filename)
+        srt_name = f"{base_name}.srt" if generate_srt else None
+
         return jsonify({
             "status": "success",
             "filename": filename,
-            "download_url": f"/clips/{filename}"
+            "download_url": f"/clips/{filename}",
+            "srt_filename": srt_name,
+            "srt_download_url": f"/clips/{srt_name}" if srt_name else None
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

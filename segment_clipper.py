@@ -39,12 +39,11 @@ def sanitize_title(title, max_len=20):
     cleaned = cleaned[:max_len].rstrip('_')
     return cleaned if cleaned else "clip"
 
-def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=None, title=None):
+def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=None, title=None, generate_srt=False, burn_subtitles=False):
     import datetime
     import re
     
     if not url:
-        # Fallback to highlights.json if available
         hl_file = os.path.join(BASE_DIR, "highlights.json")
         if os.path.exists(hl_file):
             with open(hl_file, "r", encoding="utf-8") as f:
@@ -114,6 +113,8 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
 
     print(f"Trimming precise section: offset={offset:.2f}s, duration={duration:.2f}s...")
 
+    temp_trimmed_mp4 = os.path.join(TEMP_DIR, f"trimmed_{output_filename}") if burn_subtitles else output_path
+
     cmd = [
         FFMPEG_EXE, "-y",
         "-ss", f"{offset:.2f}",
@@ -123,12 +124,39 @@ def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality=
         "-t", f"{duration:.2f}",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
-        output_path
+        temp_trimmed_mp4
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
         print("FFmpeg trim error:", res.stderr)
         raise RuntimeError("FFmpeg trim failed")
+
+    # Transcription / SRT processing if requested
+    srt_path = os.path.join(CLIPS_DIR, f"{base_name}.srt")
+    if generate_srt or burn_subtitles:
+        try:
+            print("[Clip Generator] Transcribing audio for subtitles...")
+            from transcriber import transcribe_audio_file, generate_srt as gen_srt, burn_subtitles_to_video
+            trans_res = transcribe_audio_file(temp_trimmed_mp4)
+            temp_srt = os.path.join(TEMP_DIR, f"{base_name}.srt")
+            gen_srt(trans_res["segments"], temp_srt, offset_start=0.0)
+
+            if generate_srt:
+                import shutil
+                shutil.copyfile(temp_srt, srt_path)
+                print(f"[Success] SRT subtitle file saved: {srt_path}")
+
+            if burn_subtitles:
+                print("[Clip Generator] Burning subtitles into video...")
+                burn_subtitles_to_video(temp_trimmed_mp4, temp_srt, output_path)
+                if os.path.exists(temp_trimmed_mp4):
+                    os.remove(temp_trimmed_mp4)
+        except Exception as e:
+            print("[Warning] Subtitle generation error:", e)
+            # If subtitle burn failed, fallback to trimmed mp4
+            if burn_subtitles and os.path.exists(temp_trimmed_mp4) and not os.path.exists(output_path):
+                import shutil
+                shutil.move(temp_trimmed_mp4, output_path)
 
     # Cleanup temp segment stream files
     for f in [raw_v_path, raw_a_path]:
