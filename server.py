@@ -160,11 +160,23 @@ def search_transcripts_endpoint():
 
 @app.route("/api/clips", methods=["GET"])
 def get_clips():
-    current_url = CURRENT_DATA.get("url", "").strip()
-    if not current_url:
+    if not os.path.exists(CLIPS_DIR):
         return jsonify({"clips": []})
-    clips = [f for f in os.listdir(CLIPS_DIR) if f.endswith(".mp4")]
-    return jsonify({"clips": clips})
+    
+    files = [f for f in os.listdir(CLIPS_DIR) if f.endswith(".mp4")]
+    # Sort by newest creation/modification time first
+    files.sort(key=lambda f: os.path.getmtime(os.path.join(CLIPS_DIR, f)), reverse=True)
+    
+    clip_details = []
+    for f in files:
+        base_name, _ = os.path.splitext(f)
+        srt_exists = os.path.exists(os.path.join(CLIPS_DIR, f"{base_name}.srt"))
+        clip_details.append({
+            "filename": f,
+            "has_srt": srt_exists,
+            "srt_filename": f"{base_name}.srt" if srt_exists else None
+        })
+    return jsonify({"clips": files, "details": clip_details})
 
 @app.route("/clips/<path:filename>", methods=["GET"])
 def download_clip(filename):
