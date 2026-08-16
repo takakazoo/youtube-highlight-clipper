@@ -134,6 +134,18 @@ def analyze_new():
         "message": "解析タスクを開始しました"
     })
 
+@app.route("/api/transcripts", methods=["GET"])
+def get_transcripts_endpoint():
+    current_url = CURRENT_DATA.get("url", "").strip()
+    if not current_url:
+        return jsonify({"segments": []})
+    trans_file = os.path.join(BASE_DIR, "transcripts.json")
+    if os.path.exists(trans_file):
+        with open(trans_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return jsonify(data)
+    return jsonify({"segments": []})
+
 @app.route("/api/transcript_search", methods=["GET"])
 def search_transcripts_endpoint():
     query = request.args.get("q", "").strip()

@@ -388,6 +388,13 @@
           <iframe id="ytPlayer" src="" allowfullscreen></iframe>
         </div>
         
+        <!-- Realtime Live Subtitle Bar (Synchronized with Video Time) -->
+        <div id="liveSubtitleContainer" style="background: rgba(15, 23, 42, 0.85); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; min-height: 48px; display: flex; align-items: center; justify-content: center; text-align: center; backdrop-filter: blur(8px); transition: all 0.2s ease;">
+          <div id="liveSubtitleText" style="font-size: 0.95rem; font-weight: 500; color: #f8fafc; line-height: 1.4;">
+            <span style="color: var(--text-muted); font-size: 0.85rem;">💬 再生に合わせてここに発話テキスト（テロップ）がリアルタイム表示されます</span>
+          </div>
+        </div>
+        
         <!-- Options Toolbar (Toggles 1, 2, 3) -->
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: center; font-size: 0.85rem;">
           <span style="font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem;">⚙️ オプション:</span>
@@ -480,8 +487,9 @@
   <script>
     let CURRENT_VIDEO_ID = "";
     let ytPlayer = null;
-    let stopCheckInterval = null;
+    let playbackInterval = null;
     let targetEndSec = null;
+    let videoSegments = [];
 
     function onYouTubeIframeAPIReady() {
       ytPlayer = new YT.Player('ytPlayer', {
@@ -497,22 +505,59 @@
     }
 
     function onPlayerStateChange(event) {
+      clearInterval(playbackInterval);
       if (event.data === YT.PlayerState.PLAYING) {
-        if (targetEndSec !== null) {
-          clearInterval(stopCheckInterval);
-          stopCheckInterval = setInterval(() => {
-            if (ytPlayer && ytPlayer.getCurrentTime) {
-              const cur = ytPlayer.getCurrentTime();
-              if (cur >= targetEndSec) {
-                ytPlayer.pauseVideo();
-                targetEndSec = null;
-                clearInterval(stopCheckInterval);
-              }
+        playbackInterval = setInterval(() => {
+          if (ytPlayer && ytPlayer.getCurrentTime) {
+            const cur = ytPlayer.getCurrentTime();
+            updateLiveSubtitle(cur);
+
+            if (targetEndSec !== null && cur >= targetEndSec) {
+              ytPlayer.pauseVideo();
+              targetEndSec = null;
+              clearInterval(playbackInterval);
             }
-          }, 200);
-        }
+          }
+        }, 150);
+      }
+    }
+
+    function updateLiveSubtitle(currentTime) {
+      const showTranscript = document.getElementById('toggleShowTranscript').checked;
+      const container = document.getElementById('liveSubtitleContainer');
+      const textElem = document.getElementById('liveSubtitleText');
+
+      if (!showTranscript) {
+        container.style.display = 'none';
+        return;
+      }
+      container.style.display = 'flex';
+
+      if (!videoSegments || videoSegments.length === 0) {
+        return;
+      }
+
+      // Find segment matching current time
+      const match = videoSegments.find(s => currentTime >= s.start && currentTime <= s.end);
+      if (match) {
+        textElem.innerHTML = `<span style="color: #fbbf24; font-size: 0.8rem; margin-right: 0.4rem;">[${Math.floor(currentTime)}秒]</span> <strong style="color: #ffffff; font-size: 1.05rem;">${match.text}</strong>`;
+        container.style.borderColor = 'var(--accent-primary)';
       } else {
-        clearInterval(stopCheckInterval);
+        // Find nearest or show idle
+        textElem.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">🎵 [${Math.floor(currentTime)}秒] (発話なし / BGM)</span>`;
+        container.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+      }
+    }
+
+    async function loadTranscripts() {
+      try {
+        const res = await fetch('/api/transcripts');
+        const data = await res.json();
+        if (data.segments) {
+          videoSegments = data.segments;
+        }
+      } catch (e) {
+        console.error("Failed to load transcripts:", e);
       }
     }
 
@@ -570,6 +615,10 @@
           badge.style.backgroundColor = 'rgba(56, 189, 248, 0.12)';
           badge.style.color = '#38bdf8';
           badge.innerText = `URLを入力してください`;
+        }
+
+        if (data.url && !data.is_analyzing && videoSegments.length === 0) {
+          loadTranscripts();
         }
       } catch (e) {
         console.error(e);
