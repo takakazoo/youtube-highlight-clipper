@@ -9,13 +9,14 @@ import soundfile as sf
 import imageio_ffmpeg
 
 FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
-VIDEO_URL = "https://www.youtube.com/watch?v=RJrGlRVA0-s"
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 AUDIO_PATH = os.path.join(OUTPUT_DIR, "audio.m4a")
 WAV_PATH = os.path.join(OUTPUT_DIR, "audio_16k.wav")
 HIGHLIGHTS_JSON = os.path.join(OUTPUT_DIR, "highlights.json")
 
 def download_audio(url, output_path):
+    if not url:
+        raise ValueError("URL is required for download.")
     print("Downloading audio stream...")
     ffmpeg_dir = os.path.dirname(FFMPEG_PATH)
     ydl_opts = {
@@ -39,7 +40,7 @@ def convert_to_wav(input_path, output_path):
         raise RuntimeError("FFmpeg audio conversion failed.")
     print("Converted successfully.")
 
-def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, video_url=VIDEO_URL):
+def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, video_url=""):
     print("Analyzing audio volume and energy spikes...")
     y, sr = librosa.load(wav_path, sr=16000)
     total_duration = len(y) / sr
@@ -122,8 +123,14 @@ def analyze_highlights(wav_path, clip_duration=45, min_interval=60, top_k=10, vi
     return results
 
 if __name__ == "__main__":
-    if not os.path.exists(AUDIO_PATH):
-        download_audio(VIDEO_URL, AUDIO_PATH)
-    if not os.path.exists(WAV_PATH):
-        convert_to_wav(AUDIO_PATH, WAV_PATH)
-    analyze_highlights(WAV_PATH)
+    if len(sys.argv) < 2:
+        print("Usage: python analyze_audio.py <YouTube_URL>")
+        sys.exit(1)
+    
+    target_url = sys.argv[1]
+    if os.path.exists(AUDIO_PATH): os.remove(AUDIO_PATH)
+    if os.path.exists(WAV_PATH): os.remove(WAV_PATH)
+    
+    download_audio(target_url, AUDIO_PATH)
+    convert_to_wav(AUDIO_PATH, WAV_PATH)
+    analyze_highlights(WAV_PATH, video_url=target_url)

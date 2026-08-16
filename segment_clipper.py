@@ -17,9 +17,9 @@ TEMP_DIR = os.path.join(BASE_DIR, "temp_segments")
 os.makedirs(CLIPS_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-VIDEO_URL = "https://www.youtube.com/watch?v=RJrGlRVA0-s"
-
-def get_manifest_info(url=VIDEO_URL):
+def get_manifest_info(url):
+    if not url:
+        raise ValueError("URL is required to fetch manifest info.")
     ydl_opts = {'quiet': True, 'no_warnings': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -39,9 +39,19 @@ def sanitize_title(title, max_len=20):
     cleaned = cleaned[:max_len].rstrip('_')
     return cleaned if cleaned else "clip"
 
-def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=VIDEO_URL, title=None):
+def generate_clip_by_segments(start_sec, end_sec, output_filename=None, quality="720p", url=None, title=None):
     import datetime
     import re
+    
+    if not url:
+        # Fallback to highlights.json if available
+        hl_file = os.path.join(BASE_DIR, "highlights.json")
+        if os.path.exists(hl_file):
+            with open(hl_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                url = data.get("video_url")
+        if not url:
+            raise ValueError("Video URL must be provided.")
     
     info = get_manifest_info(url)
     video_title = title or info.get('title', '')

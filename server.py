@@ -40,7 +40,7 @@ def extract_youtube_id(url):
         m = re.search(p, url)
         if m:
             return m.group(1)
-    return "RJrGlRVA0-s"
+    return ""
 
 @app.route("/")
 def index():
